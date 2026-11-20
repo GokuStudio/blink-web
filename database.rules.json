@@ -37,14 +37,22 @@
         // Device State (Blink Eyes Display State)
         "state": {
           ".write": "auth != null && (root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'blink-device' || root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'integrated-demo')",
-          ".validate": "newData.hasChildren(['revision', 'updatedAt'])"
+          ".validate": "newData.hasChildren(['revision', 'updatedAt']) && (!data.exists() || newData.child('revision').val() > data.child('revision').val())"
         },
 
-        // Device Commands (Dispatched from Companion Insights)
+        // Transient Device Telemetry (Latest-Value Model)
+        "telemetry": {
+          ".read": "auth != null && root.child('rooms').child($roomId).child('members').child(auth.uid).exists()",
+          ".write": "auth != null && (root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'blink-device' || root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'integrated-demo')",
+          ".validate": "newData.child('isSimulated').val() === true && newData.hasChildren(['timestamp', 'isSimulated', 'currentBlinkRatePerMinute'])"
+        },
+
+        // Device Commands (Dispatched from Companion Insights & Acknowledged by Device)
         "commands": {
           "$commandId": {
-            ".write": "auth != null && (root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'companion-insights' || root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'integrated-demo')",
-            ".validate": "newData.hasChildren(['id', 'type', 'targetDeviceId', 'createdAt'])"
+            ".read": "auth != null && root.child('rooms').child($roomId).child('members').child(auth.uid).exists()",
+            ".write": "auth != null && ((!data.exists() && (root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'companion-insights' || root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'integrated-demo') && newData.child('senderId').val() === auth.uid && newData.child('expiresAt').val() > now && newData.child('createdAt').val() <= now + 5000) || (data.exists() && (root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'blink-device' || root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'integrated-demo') && newData.child('senderId').val() === data.child('senderId').val() && newData.child('id').val() === data.child('id').val() && newData.child('type').val() === data.child('type').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('expiresAt').val() === data.child('expiresAt').val()))",
+            ".validate": "newData.hasChildren(['id', 'type', 'targetDeviceId', 'createdAt', 'expiresAt', 'senderId'])"
           }
         }
       }

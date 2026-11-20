@@ -209,7 +209,9 @@ describe('F2A: Secure Room Pairing & Authorization (Emulator-Backed)', () => {
       id: 'cmd-test-01',
       type: 'SET_EXPRESSION',
       targetDeviceId: 'blink-device-01',
+      senderId: clientB.uid,
       createdAt: Date.now(),
+      expiresAt: Date.now() + 10000,
     });
   });
 

@@ -50,6 +50,22 @@ export type DeviceCommandType =
   | 'RESET_STATE'
   | 'SET_BRIGHTNESS';
 
+export type CommandExecutionStatus =
+  | 'pending'
+  | 'received'
+  | 'executed'
+  | 'rejected'
+  | 'expired'
+  | 'timed_out';
+
+export interface CommandAcknowledgment {
+  commandId: string;
+  status: CommandExecutionStatus;
+  acknowledgedAt: number;
+  acknowledgedBy: string;
+  resultMessage?: string;
+}
+
 export interface DeviceCommand<TPayload = unknown> {
   id: string; // Unique command UUID for idempotency
   schemaVersion: number;
@@ -59,8 +75,10 @@ export interface DeviceCommand<TPayload = unknown> {
   payload: TPayload;
   createdAt: number;
   expiresAt: number; // Command expiration to avoid delayed execution
+  status?: CommandExecutionStatus;
   acknowledged?: boolean;
   acknowledgedAt?: number;
+  acknowledgment?: CommandAcknowledgment;
 }
 
 export interface SetExpressionPayload {
