@@ -8,6 +8,7 @@ export interface DeviceStore {
   setExpression: (expr: BlinkExpressionType) => void;
   setBrightness: (val: number) => void;
   triggerBlink: () => void;
+  triggerNudge: () => void;
 }
 
 export const useDeviceStore = create<DeviceStore>((set) => ({
@@ -19,5 +20,8 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
   triggerBlink: () => {
     set({ isBlinking: true });
     setTimeout(() => set({ isBlinking: false }), 200);
+  },
+  triggerNudge: () => {
+    set({ expression: 'nudging' });
   },
 }));

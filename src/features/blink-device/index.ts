@@ -4,5 +4,6 @@
  */
 
 export * from './components/DeviceShell';
+export * from './components/EyeCanvas';
 export * from './components/EyeCanvasPlaceholder';
 export * from './state';
