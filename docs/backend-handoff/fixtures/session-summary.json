@@ -1,0 +1,16 @@
+{
+  "sessionId": "sess-summary-001",
+  "userId": "sample-controller-uid",
+  "schemaVersion": 1,
+  "isSimulated": true,
+  "startedAt": 1795185100000,
+  "endedAt": 1795186900000,
+  "durationSeconds": 1800,
+  "averageBlinksPerMinute": 16.5,
+  "lowestBlinkRate": 7,
+  "highestBlinkRate": 22,
+  "totalNudgesDelivered": 2,
+  "totalNudgesAcknowledged": 2,
+  "finalEyeHealthScore": 88,
+  "notes": "Good recovery following second nudge break"
+}

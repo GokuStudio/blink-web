@@ -1,0 +1,11 @@
+{
+  "id": "cmd-stop-004",
+  "schemaVersion": 1,
+  "targetDeviceId": "sample-device-uid",
+  "senderId": "sample-controller-uid",
+  "type": "STOP_MONITORING",
+  "payload": {},
+  "createdAt": 1795185400000,
+  "expiresAt": 1795185460000,
+  "status": "pending"
+}

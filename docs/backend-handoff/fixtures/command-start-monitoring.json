@@ -1,0 +1,11 @@
+{
+  "id": "cmd-start-003",
+  "schemaVersion": 1,
+  "targetDeviceId": "sample-device-uid",
+  "senderId": "sample-controller-uid",
+  "type": "START_MONITORING",
+  "payload": {},
+  "createdAt": 1795185100000,
+  "expiresAt": 1795185160000,
+  "status": "pending"
+}

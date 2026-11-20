@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "intervalMinutes": 20,
+  "thresholdLowBlinkRate": 12,
+  "soundEnabled": false,
+  "hapticEnabled": true,
+  "autoDismissSeconds": 5,
+  "customMessage": "Time to rest your eyes for 20 seconds!"
+}

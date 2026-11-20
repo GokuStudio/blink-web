@@ -1,0 +1,15 @@
+{
+  "eventId": "tel-lowblink-002",
+  "schemaVersion": 1,
+  "timestamp": 1795185300000,
+  "isSimulated": true,
+  "deviceId": "sample-blink-device",
+  "blinkCount": 46,
+  "sessionDurationSeconds": 250,
+  "currentBlinkRatePerMinute": 7,
+  "averageBlinkRatePerMinute": 12,
+  "eyeFatigueScore": 68,
+  "eyeHealthScore": 58,
+  "screenDistanceCm": 48,
+  "ambientLightLux": 210
+}

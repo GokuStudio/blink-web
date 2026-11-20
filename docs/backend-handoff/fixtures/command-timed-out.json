@@ -1,0 +1,7 @@
+{
+  "commandId": "cmd-exp-004",
+  "status": "timed_out",
+  "acknowledgedAt": 1795185110000,
+  "acknowledgedBy": "system",
+  "resultMessage": "Command timed out after 10000ms"
+}

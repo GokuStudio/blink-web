@@ -1,12 +1,30 @@
 import React, { useState } from 'react';
-import { DeviceShell } from '@/features/blink-device';
+import { DeviceShell, EyeTrackingDevPanel, usePersonalityStore } from '@/features/blink-device';
+import { useDeviceStore } from '@/features/blink-device/state';
+import { BlinkExpressionType } from '@/shared/contracts';
 import { InsightsShell } from '@/features/insights';
 import { Navbar } from '@/shared/components/layout/Navbar';
-import { Sliders, RefreshCw, Smartphone } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Sliders, RefreshCw, Smartphone, Sparkles, Activity } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
 
 export const DemoPage: React.FC = () => {
-  const [showConfig, setShowConfig] = useState(false);
+  const [searchParams] = useSearchParams();
+  const [showConfig, setShowConfig] = useState(() => searchParams.get('config') === '1');
+  const [configTab, setConfigTab] = useState<'controls' | 'tracking'>(() =>
+    searchParams.get('tab') === 'tracking' ? 'tracking' : 'controls'
+  );
+  const {
+    expression: storeExpr,
+    setExpression,
+    triggerBlink,
+    triggerWink,
+    triggerNudge,
+    materialParams,
+    setMaterialParam,
+    resetMaterialParams,
+  } = useDeviceStore();
+  const exprParam = searchParams.get('expr') as BlinkExpressionType | null;
+  const expression = exprParam || storeExpr;
 
   return (
     <div className="min-h-screen bg-[#080A0C] flex flex-col text-white">
@@ -55,7 +73,7 @@ export const DemoPage: React.FC = () => {
               </span>
             </div>
 
-            <DeviceShell mode="desktop-integrated" />
+            <DeviceShell mode="desktop-integrated" expression={expression} />
 
             <div className="w-full text-center mt-4 text-xs text-neutral-500">
               WebGL Eyes Canvas rendered beneath transparent physical bezel asset.
@@ -80,28 +98,218 @@ export const DemoPage: React.FC = () => {
         </button>
 
         {showConfig && (
-          <div className="absolute bottom-16 right-0 w-72 p-4 rounded-2xl bg-[#171A1D] border border-[#272E36] shadow-2xl text-xs space-y-3 animate-in fade-in slide-in-from-bottom-2">
+          <div className="absolute bottom-16 right-0 w-88 sm:w-96 max-h-[85vh] overflow-y-auto p-4 rounded-2xl bg-[#171A1D] border border-[#272E36] shadow-2xl text-xs space-y-3 animate-in fade-in slide-in-from-bottom-2">
             <div className="flex items-center justify-between font-semibold text-white">
-              <span>Demo Controls</span>
+              <div className="flex items-center gap-1 bg-[#0E1114] p-1 rounded-xl border border-[#272E36]">
+                <button
+                  onClick={() => setConfigTab('controls')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    configTab === 'controls'
+                      ? 'bg-[#35DFFF] text-black font-semibold'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Expressions</span>
+                </button>
+                <button
+                  onClick={() => setConfigTab('tracking')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    configTab === 'tracking'
+                      ? 'bg-[#35DFFF] text-black font-semibold'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  <Activity className="w-3.5 h-3.5" />
+                  <span>Eye Tracking</span>
+                </button>
+              </div>
               <button
                 onClick={() => setShowConfig(false)}
-                className="text-neutral-400 hover:text-white"
+                className="text-neutral-400 hover:text-white p-1"
               >
                 ✕
               </button>
             </div>
-            <p className="text-neutral-400">
-              Phase W0 Foundation mode. Room code: <span className="font-mono text-[#9AEA3F]">BLINK-DEMO</span>
-            </p>
-            <div className="pt-2 border-t border-[#272E36]">
-              <button
-                onClick={() => window.location.reload()}
-                className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-white"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Reset Demo State
-              </button>
-            </div>
+
+            {configTab === 'tracking' ? (
+              <EyeTrackingDevPanel />
+            ) : (
+              <>
+                <p className="text-neutral-400">
+                  Active Expression: <span className="font-mono text-[#35DFFF] font-bold">{expression}</span>
+                </p>
+
+                <div className="space-y-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-neutral-400 font-semibold">Primary Expressions</span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(['idle', 'happy', 'sleepy', 'alert', 'thinking', 'listening'] as BlinkExpressionType[]).map((expr) => (
+                      <button
+                        key={expr}
+                        onClick={() => {
+                          setExpression(expr);
+                          usePersonalityStore.getState().onUserExpression(expr);
+                        }}
+                        className={`py-1.5 px-2 rounded-lg font-medium text-center capitalize transition-colors ${
+                          expression === expr
+                            ? 'bg-[#35DFFF] text-black font-semibold'
+                            : 'bg-[#22262B] text-neutral-300 hover:bg-[#2A3036] hover:text-white'
+                        }`}
+                      >
+                        {expr}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-2 border-t border-[#272E36]">
+                  <span className="text-[10px] uppercase tracking-wider text-neutral-400 font-semibold">Choreography & Actions</span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      onClick={() => triggerBlink()}
+                      className="py-1.5 px-2 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-[#35DFFF] font-medium text-center"
+                    >
+                      Natural Blink
+                    </button>
+                    <button
+                      onClick={() => triggerBlink({ isDouble: true })}
+                      className="py-1.5 px-2 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-[#35DFFF] font-medium text-center"
+                    >
+                      Double Blink
+                    </button>
+                    <button
+                      onClick={() => triggerWink('left')}
+                      className="py-1.5 px-2 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-neutral-300 font-medium text-center"
+                    >
+                      Wink Left
+                    </button>
+                    <button
+                      onClick={() => triggerWink('right')}
+                      className="py-1.5 px-2 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-neutral-300 font-medium text-center"
+                    >
+                      Wink Right
+                    </button>
+                    <button
+                      onClick={() => triggerNudge()}
+                      className="col-span-2 py-1.5 px-2 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-[#FF5449] font-medium text-center"
+                    >
+                      Trigger Nudge
+                    </button>
+                  </div>
+                </div>
+
+                {/* Development Material Tuning Controls (Refinement 03) */}
+                <div className="space-y-2 pt-2 border-t border-[#272E36]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase tracking-wider text-neutral-400 font-semibold">
+                      Optical Material Controls
+                    </span>
+                    <button
+                      onClick={() => resetMaterialParams()}
+                      className="text-[10px] text-[#35DFFF] hover:underline"
+                    >
+                      Reset Defaults
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div>
+                      <div className="flex justify-between text-[10px] text-neutral-400 mb-0.5">
+                        <span>Inner Emission</span>
+                        <span className="font-mono text-white">{materialParams.innerEmission.toFixed(2)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="1.5"
+                        step="0.05"
+                        value={materialParams.innerEmission}
+                        onChange={(e) => setMaterialParam('innerEmission', parseFloat(e.target.value))}
+                        className="w-full h-1 bg-[#22262B] rounded-lg appearance-none cursor-pointer accent-[#35DFFF]"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-[10px] text-neutral-400 mb-0.5">
+                        <span>Rim Diffusion</span>
+                        <span className="font-mono text-white">{materialParams.rimDiffusion.toFixed(2)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="1.5"
+                        step="0.05"
+                        value={materialParams.rimDiffusion}
+                        onChange={(e) => setMaterialParam('rimDiffusion', parseFloat(e.target.value))}
+                        className="w-full h-1 bg-[#22262B] rounded-lg appearance-none cursor-pointer accent-[#35DFFF]"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-[10px] text-neutral-400 mb-0.5">
+                        <span>Outer Halo</span>
+                        <span className="font-mono text-white">{materialParams.outerHalo.toFixed(2)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.4"
+                        max="1.6"
+                        step="0.05"
+                        value={materialParams.outerHalo}
+                        onChange={(e) => setMaterialParam('outerHalo', parseFloat(e.target.value))}
+                        className="w-full h-1 bg-[#22262B] rounded-lg appearance-none cursor-pointer accent-[#35DFFF]"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-[10px] text-neutral-400 mb-0.5">
+                        <span>Texture Contrast</span>
+                        <span className="font-mono text-white">{materialParams.textureContrast.toFixed(2)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="1.5"
+                        step="0.05"
+                        value={materialParams.textureContrast}
+                        onChange={(e) => setMaterialParam('textureContrast', parseFloat(e.target.value))}
+                        className="w-full h-1 bg-[#22262B] rounded-lg appearance-none cursor-pointer accent-[#35DFFF]"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-[10px] text-neutral-400 mb-0.5">
+                        <span>Substrate Depth</span>
+                        <span className="font-mono text-white">{materialParams.depthVariation.toFixed(2)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="1.5"
+                        step="0.05"
+                        value={materialParams.depthVariation}
+                        onChange={(e) => setMaterialParam('depthVariation', parseFloat(e.target.value))}
+                        className="w-full h-1 bg-[#22262B] rounded-lg appearance-none cursor-pointer accent-[#35DFFF]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-[#272E36]">
+                  <button
+                    onClick={() => {
+                      setExpression('idle');
+                      resetMaterialParams();
+                      window.location.reload();
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-white"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Reset Demo State
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

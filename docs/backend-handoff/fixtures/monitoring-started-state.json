@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "revision": 3,
+  "deviceId": "sample-blink-device",
+  "deviceName": "Blink [BLINK-DEMO-001]",
+  "status": "connected",
+  "brightness": 1.0,
+  "expression": {
+    "current": "idle",
+    "targetExpression": "idle",
+    "transitionProgress": 1.0,
+    "intensity": 1.0,
+    "gaze": { "x": 0, "y": 0 },
+    "isBlinking": false,
+    "blinkFrequencyPerMin": 18,
+    "lastChangedAt": 1795185065000
+  },
+  "monitoring": {
+    "mode": "active",
+    "sessionStartedAt": 1795185100000,
+    "sessionDurationSeconds": 120,
+    "totalBlinksDetected": 34,
+    "isSimulated": true,
+    "sampleIntervalMs": 1000,
+    "lastSampleTimestamp": 1795185220000
+  },
+  "nudgeConfig": {
+    "enabled": true,
+    "intervalMinutes": 20,
+    "thresholdLowBlinkRate": 12,
+    "soundEnabled": false,
+    "hapticEnabled": true,
+    "autoDismissSeconds": 5
+  },
+  "latestTelemetry": {
+    "eventId": "tel-stream-003",
+    "schemaVersion": 1,
+    "timestamp": 1795185220000,
+    "isSimulated": true,
+    "currentBlinkRatePerMinute": 17,
+    "averageBlinkRatePerMinute": 17,
+    "eyeFatigueScore": 12,
+    "eyeHealthScore": 95,
+    "blinkCount": 34,
+    "sessionDurationSeconds": 120
+  },
+  "updatedAt": 1795185220000
+}

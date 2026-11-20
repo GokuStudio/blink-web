@@ -1,0 +1,12 @@
+{
+  "uid": "sample-device-uid",
+  "role": "blink-device",
+  "status": "connected",
+  "lastSeen": 1795185000000,
+  "connections": {
+    "conn_device_tab_01": {
+      "connectedAt": 1795185000000,
+      "userAgent": "Mozilla/5.0 BlinkDevice/1.0"
+    }
+  }
+}

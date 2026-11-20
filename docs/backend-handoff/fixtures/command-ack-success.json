@@ -1,0 +1,23 @@
+{
+  "id": "cmd-exp-001",
+  "schemaVersion": 1,
+  "targetDeviceId": "sample-device-uid",
+  "senderId": "sample-controller-uid",
+  "type": "SET_EXPRESSION",
+  "payload": {
+    "expression": "happy",
+    "durationSeconds": 5
+  },
+  "createdAt": 1795185060000,
+  "expiresAt": 1795185120000,
+  "status": "executed",
+  "acknowledged": true,
+  "acknowledgedAt": 1795185062000,
+  "acknowledgment": {
+    "commandId": "cmd-exp-001",
+    "status": "executed",
+    "acknowledgedAt": 1795185062000,
+    "acknowledgedBy": "sample-device-uid",
+    "resultMessage": "Expression set to happy"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "uid": "sample-device-uid",
+  "role": "blink-device",
+  "status": "reconnecting",
+  "lastSeen": 1795185180000,
+  "connections": {}
+}

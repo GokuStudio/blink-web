@@ -1,0 +1,7 @@
+{
+  "uid": "sample-device-uid",
+  "role": "blink-device",
+  "status": "disconnected",
+  "lastSeen": 1795185120000,
+  "connections": {}
+}
