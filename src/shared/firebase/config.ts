@@ -4,9 +4,11 @@ import { env } from '@/config/env';
 export const firebaseConfig: FirebaseOptions = {
   apiKey: env.firebase.apiKey,
   authDomain: env.firebase.authDomain,
-  projectId: env.firebase.projectId,
+  projectId: env.useEmulators ? 'blink-web-demo' : env.firebase.projectId,
   storageBucket: env.firebase.storageBucket,
   messagingSenderId: env.firebase.messagingSenderId,
   appId: env.firebase.appId,
-  databaseURL: env.firebase.databaseURL,
+  databaseURL: env.useEmulators
+    ? 'https://blink-web-demo-default-rtdb.firebaseio.com'
+    : env.firebase.databaseURL,
 };

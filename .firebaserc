@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "blink-web-demo"
-  }
+    "default": "blink-web-demo",
+    "blink-cloud": "blink-web-demo-32e0e"
+  },
+  "targets": {},
+  "etags": {}
 }

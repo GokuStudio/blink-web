@@ -6,6 +6,7 @@ import {
   Unsubscribe,
 } from 'firebase/auth';
 import { getFirebaseServices } from './client';
+import { env } from '@/config/env';
 
 export interface AuthUser {
   uid: string;
@@ -37,6 +38,9 @@ export async function signInAnonymous(options?: { useEmulators?: boolean }): Pro
       const authUser = mapFirebaseUser(userCredential.user)!;
       return authUser;
     } catch (error) {
+      if (env.isProductionFirebaseEnabled && !env.useEmulators) {
+        throw error;
+      }
       console.warn('[Auth] Firebase anonymous sign-in error, falling back to mock session:', error);
     }
   }

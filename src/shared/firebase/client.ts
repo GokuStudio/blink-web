@@ -53,6 +53,9 @@ export function getFirebaseServices(options?: { useEmulators?: boolean }): Fireb
 
     return { app, auth, rtdb, firestore, isReady: true, isEmulated };
   } catch (error) {
+    if (env.isProductionFirebaseEnabled && !shouldUseEmulators) {
+      throw error;
+    }
     console.warn('[Firebase] Initialization error, falling back to mock mode:', error);
     return { app: null, auth: null, rtdb: null, firestore: null, isReady: false, isEmulated: false };
   }
