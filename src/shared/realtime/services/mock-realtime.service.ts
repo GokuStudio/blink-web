@@ -140,7 +140,7 @@ export class MockRealtimeService implements IRealtimeService {
   async publishTelemetry(telemetry: DeviceTelemetry): Promise<void> {
     this.currentTelemetry = {
       ...telemetry,
-      isSimulated: true,
+      isSimulated: telemetry.isSimulated !== undefined ? telemetry.isSimulated : true,
       timestamp: Date.now(),
     };
     this.telemetryListeners.forEach((listener) => listener(this.currentTelemetry));

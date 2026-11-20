@@ -180,6 +180,53 @@ describe('F2B: Live Command & Telemetry Synchronization (Emulator-Backed)', () =
     unsub();
   });
 
+  // Case 5B: Real camera telemetry synchronizes with isSimulated: false
+  it('synchronizes real camera telemetry to controller subscription with isSimulated: false', async () => {
+    let receivedTelemetry: DeviceTelemetry | null = null;
+
+    const unsub = realtimeB.subscribeToTelemetry((t) => {
+      receivedTelemetry = t;
+    });
+
+    const realTelemetry: DeviceTelemetry = {
+      ...DEFAULT_TELEMETRY,
+      eventId: `telem-real-${Date.now()}`,
+      timestamp: Date.now(),
+      isSimulated: false, // Step 08B: Real camera telemetry allowed by RTDB rule
+      currentBlinkRatePerMinute: 17.5,
+      averageBlinkRatePerMinute: 16.8,
+      blinkCount: 60,
+      sessionDurationSeconds: 210,
+    };
+
+    await realtimeA.publishTelemetry(realTelemetry);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(receivedTelemetry).not.toBeNull();
+    const telem = receivedTelemetry as unknown as DeviceTelemetry;
+    expect(telem.currentBlinkRatePerMinute).toBe(17.5);
+    expect(telem.isSimulated).toBe(false);
+    expect(telem.blinkCount).toBe(60);
+
+    unsub();
+  });
+
+  // Case 5C: Security rule validates that isSimulated must be a strict boolean
+  it('rejects telemetry writes where isSimulated is not a boolean', async () => {
+    const invalidTelemetry = {
+      ...DEFAULT_TELEMETRY,
+      eventId: `telem-bad-${Date.now()}`,
+      timestamp: Date.now(),
+      isSimulated: 'not-a-boolean', // Violates .isBoolean() rule
+      currentBlinkRatePerMinute: 20,
+    };
+
+    const telemetryRef = ref(clientA.rtdb, `rooms/${roomCode}/telemetry`);
+    await expect(set(telemetryRef, invalidTelemetry)).rejects.toThrow(
+      /permission_denied|permission denied/i
+    );
+  });
+
   // Case 6: Unauthorized user cannot read another room
   it('prohibits unauthorized user from reading room telemetry or commands', async () => {
     await expect(get(ref(clientC.rtdb, `rooms/${roomCode}/telemetry`))).rejects.toThrow(

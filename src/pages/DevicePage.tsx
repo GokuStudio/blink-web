@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { DeviceShell } from '@/features/blink-device';
 import { useDeviceStore } from '@/features/blink-device';
+import { BlinkExpressionType } from '@/shared/contracts';
 import { useFullscreen } from '@/shared/hooks/useFullscreen';
 import { Maximize2, Minimize2, ArrowLeft, RefreshCw } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 /**
  * Mode 2: Blink Device
@@ -12,7 +13,10 @@ import { Link } from 'react-router-dom';
  * Bezel is completely hidden.
  */
 export const DevicePage: React.FC = () => {
-  const { expression, setExpression, triggerBlink } = useDeviceStore();
+  const { expression: storeExpr, setExpression, triggerBlink } = useDeviceStore();
+  const [searchParams] = useSearchParams();
+  const exprParam = searchParams.get('expr') as BlinkExpressionType | null;
+  const expression = exprParam || storeExpr;
   const { isFullscreen, toggleFullscreen } = useFullscreen();
   const [showHud, setShowHud] = useState(true);
 
@@ -56,7 +60,19 @@ export const DevicePage: React.FC = () => {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                const nextExpr = expression === 'idle' ? 'happy' : expression === 'happy' ? 'sleepy' : 'idle';
+                const primaryExpressions: BlinkExpressionType[] = [
+                  'idle',
+                  'happy',
+                  'sleepy',
+                  'alert',
+                  'thinking',
+                  'listening',
+                ];
+                const currentIndex = primaryExpressions.indexOf(expression);
+                const nextExpr =
+                  currentIndex >= 0 && currentIndex < primaryExpressions.length - 1
+                    ? primaryExpressions[currentIndex + 1]
+                    : primaryExpressions[0];
                 setExpression(nextExpr);
               }}
               className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#171A1D]/80 backdrop-blur-md border border-[#272E36] text-white text-xs hover:bg-[#22262B]"

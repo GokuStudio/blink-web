@@ -67,7 +67,7 @@
         "telemetry": {
           ".read": "auth != null && root.child('rooms').child($roomId).child('members').child(auth.uid).exists()",
           ".write": "auth != null && root.child('rooms').child($roomId).child('status').val() !== 'closed' && root.child('rooms').child($roomId).child('expiresAt').val() > now && (root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'blink-device' || root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'integrated-demo')",
-          ".validate": "newData.child('isSimulated').val() === true && newData.hasChildren(['timestamp', 'isSimulated', 'currentBlinkRatePerMinute'])"
+          ".validate": "newData.child('isSimulated').isBoolean() && newData.hasChildren(['timestamp', 'isSimulated', 'currentBlinkRatePerMinute'])"
         },
 
         // Device Commands (Dispatched from Companion Insights & Acknowledged by Device)
