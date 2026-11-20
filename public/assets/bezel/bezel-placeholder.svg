@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%" fill="none">
+  <!-- Outer Bezel Body (Dark Matte Finish) -->
+  <rect x="10" y="10" width="780" height="480" rx="40" fill="#171A1D" stroke="#252A30" stroke-width="4"/>
+  <rect x="22" y="22" width="756" height="456" rx="32" fill="#0E1114" stroke="#1F242A" stroke-width="2"/>
+  
+  <!-- Subtle Hardware Accent Lines -->
+  <line x1="80" y1="20" x2="720" y2="20" stroke="#35DFFF" stroke-opacity="0.15" stroke-width="1.5"/>
+  <circle cx="50" cy="40" r="4" fill="#35DFFF" fill-opacity="0.4"/>
+  <circle cx="750" cy="40" r="4" fill="#9AEA3F" fill-opacity="0.4"/>
+
+  <!-- Center Screen Cutout (Transparent for WebGL Canvas Behind) -->
+  <mask id="screen-cutout">
+    <rect width="800" height="500" fill="white" />
+    <rect x="80" y="70" width="640" height="360" rx="24" fill="black" />
+  </mask>
+
+  <!-- Masked Display Opening Frame -->
+  <rect x="0" y="0" width="800" height="500" fill="#171A1D" mask="url(#screen-cutout)" />
+  
+  <!-- Inner Screen Bezel Rim Glow -->
+  <rect x="79" y="69" width="642" height="362" rx="25" stroke="#35DFFF" stroke-opacity="0.25" stroke-width="2"/>
+  <rect x="81" y="71" width="638" height="358" rx="23" stroke="#000000" stroke-opacity="0.8" stroke-width="3"/>
+
+  <!-- Logo Mark at Lower Chin -->
+  <text x="400" y="465" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="600" letter-spacing="4" fill="#6B7280">BLINK COMPANION HARDWARE SHELL</text>
+</svg>

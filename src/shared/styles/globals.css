@@ -1,0 +1,41 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme {
+  --color-blink-bg: #080a0c;
+  --color-blink-surface: #171a1d;
+  --color-blink-surface-elevated: #22262b;
+  --color-blink-accent: #9aea3f;
+  --color-blink-cyan: #35dfff;
+  --color-blink-text: #ffffff;
+  --color-blink-muted: #94a3b8;
+  --color-blink-border: #272e36;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbar for dashboard */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0e1114;
+}
+::-webkit-scrollbar-thumb {
+  background: #272e36;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f4752;
+}

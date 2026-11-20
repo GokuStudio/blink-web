@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="16" fill="#080A0C"/>
+  <rect x="2" y="2" width="60" height="60" rx="14" stroke="#171A1D" stroke-width="2"/>
+  <!-- Left Eye Pill Glow -->
+  <rect x="14" y="24" width="14" height="16" rx="7" fill="#35DFFF"/>
+  <!-- Right Eye Pill Glow -->
+  <rect x="36" y="24" width="14" height="16" rx="7" fill="#35DFFF"/>
+  <!-- Lime Accent Indicator Dot -->
+  <circle cx="32" cy="50" r="2.5" fill="#9AEA3F"/>
+</svg>

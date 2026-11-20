@@ -1,0 +1,25 @@
+/**
+ * Blink Design System Semantic Tokens
+ */
+:root {
+  --bg-app: #080a0c;
+  --surface-elevated: #171a1d;
+  --surface-hover: #22262b;
+  --border-subtle: #272e36;
+  --border-bright: #3f4752;
+
+  /* Accent Colors */
+  --accent-lime: #9aea3f;
+  --accent-cyan: #35dfff;
+
+  /* Text Colors */
+  --text-primary: #ffffff;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+
+  /* Status Colors */
+  --status-connected: #9aea3f;
+  --status-warning: #facc15;
+  --status-error: #ef4444;
+  --status-idle: #35dfff;
+}

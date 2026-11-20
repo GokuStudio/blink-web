@@ -1,0 +1,22 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$roomId": {
+        // Read allowed if user is authenticated
+        ".read": "auth != null",
+        // Write allowed for members or room creation
+        ".write": "auth != null && (!data.exists() || data.child('members').child(auth.uid).exists() || newData.child('members').child(auth.uid).exists())",
+        "state": {
+          ".validate": "newData.hasChildren(['revision', 'updatedAt'])"
+        },
+        "commands": {
+          "$commandId": {
+            ".validate": "newData.hasChildren(['id', 'type', 'targetDeviceId', 'createdAt'])"
+          }
+        }
+      }
+    }
+  }
+}
