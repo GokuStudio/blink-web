@@ -63,6 +63,7 @@ export class FirebaseRoomService implements IRoomService {
       createdAt: now,
       createdBy: uid,
       expiresAt: now + expiresInMs,
+      status: 'active',
       deviceState: { ...INITIAL_DEVICE_STATE, deviceName: `Blink [${options.roomCode}]`, updatedAt: now },
       members: {
         [uid]: creatorMember,
@@ -225,5 +226,29 @@ export class FirebaseRoomService implements IRoomService {
 
     const memberStatusRef = ref(rtdb, `rooms/${roomCode}/members/${uid}/status`);
     await set(memberStatusRef, 'disconnected');
+  }
+
+  async closeRoom(roomCode: string): Promise<void> {
+    const { rtdb, auth } = this.getServices();
+    const uid = this.ensureRealAuthUser(auth);
+
+    const roomRef = ref(rtdb, `rooms/${roomCode}`);
+    const snapshot = await get(roomRef);
+    if (!snapshot.exists()) {
+      throw new Error(`[FirebaseRoomService] Room '${roomCode}' does not exist.`);
+    }
+
+    const room = snapshot.val() as DemoRoom;
+    if (room.createdBy !== uid) {
+      throw new Error(`[FirebaseRoomService] Only the room creator (${room.createdBy}) can close this room.`);
+    }
+
+    const now = Date.now();
+    const updates: Record<string, any> = {};
+    updates[`rooms/${roomCode}/status`] = 'closed';
+    updates[`rooms/${roomCode}/closedAt`] = now;
+    updates[`rooms/${roomCode}/closedBy`] = uid;
+
+    await update(ref(rtdb), updates);
   }
 }

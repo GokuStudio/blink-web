@@ -34,6 +34,7 @@ export class MockRoomService implements IRoomService {
       createdAt: now,
       createdBy: this.mockUid,
       expiresAt: now + expiresInMs,
+      status: 'active',
       deviceState: { ...INITIAL_DEVICE_STATE, deviceName: `Blink [${options.roomCode}]`, updatedAt: now },
       members: {
         [this.mockUid]: creatorMember,
@@ -160,6 +161,20 @@ export class MockRoomService implements IRoomService {
       room.members[this.mockUid].status = 'disconnected';
       this.notifyRoom(roomCode);
     }
+  }
+
+  async closeRoom(roomCode: string): Promise<void> {
+    const room = this.rooms.get(roomCode);
+    if (!room) {
+      throw new Error(`[MockRoomService] Room ${roomCode} not found.`);
+    }
+    if (room.createdBy !== this.mockUid) {
+      throw new Error(`[MockRoomService] Only the room creator can close this room.`);
+    }
+    room.status = 'closed';
+    room.closedAt = Date.now();
+    room.closedBy = this.mockUid;
+    this.notifyRoom(roomCode);
   }
 
   private notifyRoom(roomCode: string) {

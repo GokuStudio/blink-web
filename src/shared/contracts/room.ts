@@ -3,8 +3,10 @@ import { DeviceState } from './device';
 
 /**
  * Demo Room & Multi-device pairing contracts.
- * Version: 1.1.0
+ * Version: 1.2.0
  */
+
+export type RoomStatus = 'active' | 'expired' | 'closed';
 
 export interface RoomMember {
   uid: string;
@@ -33,6 +35,9 @@ export interface DemoRoom {
   createdAt: number;
   createdBy: string;
   expiresAt: number; // Demo sessions expire after 24h
+  status?: RoomStatus;
+  closedAt?: number | null;
+  closedBy?: string | null;
   deviceState: DeviceState;
   members: Record<string, RoomMember>;
   invitations?: Record<string, RoomInvitation>;

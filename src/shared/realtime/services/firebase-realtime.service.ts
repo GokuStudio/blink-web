@@ -2,8 +2,12 @@ import {
   ref,
   set,
   get,
+  update,
+  remove,
   onValue,
   onChildAdded,
+  onDisconnect,
+  serverTimestamp,
   Database,
   DatabaseReference,
 } from 'firebase/database';
@@ -16,6 +20,7 @@ import {
   ConnectionStatus,
   CommandAcknowledgment,
   CommandExecutionStatus,
+  UserPresence,
   INITIAL_DEVICE_STATE,
 } from '@/shared/contracts';
 import { getFirebaseServices } from '@/shared/firebase/client';
@@ -24,9 +29,12 @@ export class FirebaseRealtimeService implements IRealtimeService {
   private rtdb: Database | null = null;
   private auth: Auth | null = null;
   private roomCode: string | null = null;
+  private connectionId: string | null = null;
   private connectionStatus: ConnectionStatus = 'disconnected';
   private processedCommandIds: Set<string> = new Set();
   private activeSubscriptions: Array<() => void> = [];
+  private statusListeners: Set<(status: ConnectionStatus) => void> = new Set();
+  private userRole: 'blink-device' | 'companion-insights' | 'integrated-demo' = 'companion-insights';
 
   constructor(rtdb?: Database, auth?: Auth) {
     if (rtdb && auth) {
@@ -70,23 +78,214 @@ export class FirebaseRealtimeService implements IRealtimeService {
     return this.roomCode;
   }
 
-  async connect(roomCode: string, _clientId?: string): Promise<boolean> {
-    this.ensureAuthUid();
+  private updateConnectionStatus(newStatus: ConnectionStatus) {
+    if (this.connectionStatus !== newStatus) {
+      this.connectionStatus = newStatus;
+      this.statusListeners.forEach((listener) => listener(newStatus));
+    }
+  }
+
+  onConnectionStatusChange(callback: (status: ConnectionStatus) => void): () => void {
+    this.statusListeners.add(callback);
+    callback(this.connectionStatus);
+    return () => this.statusListeners.delete(callback);
+  }
+
+  async connect(roomCode: string, clientId?: string): Promise<boolean> {
+    const { rtdb } = this.getServices();
+    const uid = this.ensureAuthUid();
+
     this.roomCode = roomCode;
-    this.connectionStatus = 'connected';
-    return true;
+    this.connectionId = clientId || `conn_${Math.random().toString(36).slice(2, 9)}_${Date.now()}`;
+    this.updateConnectionStatus('connecting');
+
+    // Fetch user's registered role in the room
+    try {
+      const memberRef = ref(rtdb, `rooms/${roomCode}/members/${uid}`);
+      const memberSnap = await get(memberRef);
+      if (memberSnap.exists()) {
+        this.userRole = memberSnap.child('role').val() || 'companion-insights';
+      }
+    } catch {
+      // Keep default role if not yet read
+    }
+
+    const connectedRef = ref(rtdb, '.info/connected');
+    const myConnRef = ref(rtdb, `rooms/${roomCode}/presence/${uid}/connections/${this.connectionId}`);
+    const lastSeenRef = ref(rtdb, `rooms/${roomCode}/presence/${uid}/lastSeen`);
+    const userPresenceRef = ref(rtdb, `rooms/${roomCode}/presence/${uid}`);
+
+    return new Promise<boolean>((resolve) => {
+      let hasResolved = false;
+
+      const unsubConnected = onValue(connectedRef, async (snap) => {
+        if (snap.val() === true) {
+          try {
+            // Setup onDisconnect triggers
+            await onDisconnect(myConnRef).remove();
+            await onDisconnect(lastSeenRef).set(serverTimestamp());
+
+            // Register active connection
+            const now = Date.now();
+            await set(myConnRef, {
+              connectedAt: now,
+              userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Node/Test',
+            });
+
+            // Update user presence root
+            await update(userPresenceRef, {
+              uid,
+              role: this.userRole,
+              status: 'connected',
+              lastSeen: now,
+            });
+
+            this.updateConnectionStatus('connected');
+          } catch {
+            this.updateConnectionStatus('connected');
+          }
+
+          if (!hasResolved) {
+            hasResolved = true;
+            resolve(true);
+          }
+        } else {
+          if (this.connectionStatus === 'connected') {
+            this.updateConnectionStatus('reconnecting');
+          }
+        }
+      });
+
+      this.activeSubscriptions.push(unsubConnected);
+
+      setTimeout(() => {
+        if (!hasResolved) {
+          hasResolved = true;
+          this.updateConnectionStatus('connected');
+          resolve(true);
+        }
+      }, 250);
+    });
   }
 
   async disconnect(): Promise<void> {
+    if (this.rtdb && this.roomCode && this.connectionId) {
+      const uid = this.auth?.currentUser?.uid;
+      if (uid) {
+        try {
+          const myConnRef = ref(this.rtdb, `rooms/${this.roomCode}/presence/${uid}/connections/${this.connectionId}`);
+          const lastSeenRef = ref(this.rtdb, `rooms/${this.roomCode}/presence/${uid}/lastSeen`);
+
+          await onDisconnect(myConnRef).cancel();
+          await remove(myConnRef);
+          await set(lastSeenRef, Date.now());
+        } catch {
+          // Ignore teardown errors
+        }
+      }
+    }
+
     this.activeSubscriptions.forEach((cleanup) => cleanup());
     this.activeSubscriptions = [];
     this.processedCommandIds.clear();
     this.roomCode = null;
-    this.connectionStatus = 'disconnected';
+    this.connectionId = null;
+    this.updateConnectionStatus('disconnected');
   }
 
   getConnectionStatus(): ConnectionStatus {
     return this.connectionStatus;
+  }
+
+  subscribeToPresence(callback: (presenceMap: Record<string, UserPresence>) => void): () => void {
+    const { rtdb } = this.getServices();
+    const roomCode = this.ensureConnectedRoom();
+    this.ensureAuthUid();
+
+    const presenceRef: DatabaseReference = ref(rtdb, `rooms/${roomCode}/presence`);
+    const unsubscribe = onValue(
+      presenceRef,
+      (snapshot) => {
+        const presenceMap: Record<string, UserPresence> = {};
+        if (snapshot.exists()) {
+          const val = snapshot.val();
+          const now = Date.now();
+          Object.keys(val).forEach((uid) => {
+            const userRaw = val[uid];
+            const connections = userRaw.connections || {};
+            const isOnline = Object.keys(connections).length > 0;
+            const lastSeen = userRaw.lastSeen || 0;
+            const isStale = !isOnline && now - lastSeen > 30000;
+            const status: ConnectionStatus = isOnline ? 'connected' : (isStale ? 'stale' : 'disconnected');
+
+            presenceMap[uid] = {
+              uid,
+              role: userRaw.role || 'companion-insights',
+              status,
+              lastSeen,
+              connections,
+            };
+          });
+        }
+        callback(presenceMap);
+      },
+      (error) => {
+        console.warn(`[FirebaseRealtimeService] Presence subscription error for room ${roomCode}:`, error);
+      }
+    );
+
+    this.activeSubscriptions.push(unsubscribe);
+    return unsubscribe;
+  }
+
+  async getUserPresence(uid: string): Promise<UserPresence | null> {
+    const { rtdb } = this.getServices();
+    const roomCode = this.ensureConnectedRoom();
+    this.ensureAuthUid();
+
+    const userRef = ref(rtdb, `rooms/${roomCode}/presence/${uid}`);
+    const snapshot = await get(userRef);
+    if (!snapshot.exists()) return null;
+
+    const raw = snapshot.val();
+    const connections = raw.connections || {};
+    const isOnline = Object.keys(connections).length > 0;
+    const lastSeen = raw.lastSeen || 0;
+    const isStale = !isOnline && Date.now() - lastSeen > 30000;
+    const status: ConnectionStatus = isOnline ? 'connected' : (isStale ? 'stale' : 'disconnected');
+
+    return {
+      uid,
+      role: raw.role || 'companion-insights',
+      status,
+      lastSeen,
+      connections,
+    };
+  }
+
+  async isDeviceOnline(deviceUid?: string): Promise<boolean> {
+    const { rtdb } = this.getServices();
+    const roomCode = this.ensureConnectedRoom();
+    this.ensureAuthUid();
+
+    if (deviceUid) {
+      const presence = await this.getUserPresence(deviceUid);
+      return presence?.status === 'connected';
+    }
+
+    const presenceRef = ref(rtdb, `rooms/${roomCode}/presence`);
+    const snapshot = await get(presenceRef);
+    if (!snapshot.exists()) return false;
+
+    const val = snapshot.val();
+    for (const uid of Object.keys(val)) {
+      const user = val[uid];
+      if (user.role === 'blink-device' || user.role === 'integrated-demo') {
+        const conns = user.connections || {};
+        if (Object.keys(conns).length > 0) return true;
+      }
+    }
+    return false;
   }
 
   subscribeToDeviceState(callback: (state: DeviceState) => void): () => void {
@@ -186,7 +385,6 @@ export class FirebaseRealtimeService implements IRealtimeService {
 
     const commandsRef: DatabaseReference = ref(rtdb, `rooms/${roomCode}/commands`);
 
-    // Listen to child additions under /commands
     const unsubscribe = onChildAdded(
       commandsRef,
       (snapshot) => {
@@ -205,7 +403,7 @@ export class FirebaseRealtimeService implements IRealtimeService {
           return;
         }
 
-        // Already acknowledged commands (replays on reconnection)
+        // Skip already acknowledged commands
         if (command.acknowledged || (command.status && command.status !== 'pending')) {
           this.processedCommandIds.add(command.id);
           return;
@@ -223,17 +421,31 @@ export class FirebaseRealtimeService implements IRealtimeService {
     return unsubscribe;
   }
 
-  async sendCommand(command: DeviceCommand): Promise<boolean> {
+  async sendCommand(command: DeviceCommand, options?: { timeoutMs?: number }): Promise<boolean> {
     const { rtdb } = this.getServices();
     const roomCode = this.ensureConnectedRoom();
     const uid = this.ensureAuthUid();
 
+    // Verify room is active and not expired
+    const roomRef = ref(rtdb, `rooms/${roomCode}`);
+    const roomSnap = await get(roomRef);
+    if (roomSnap.exists()) {
+      const room = roomSnap.val();
+      if (room.status === 'closed') {
+        throw new Error(`[FirebaseRealtimeService] Cannot send command: room ${roomCode} is closed.`);
+      }
+      if (room.expiresAt && room.expiresAt <= Date.now()) {
+        throw new Error(`[FirebaseRealtimeService] Cannot send command: room ${roomCode} has expired.`);
+      }
+    }
+
     const now = Date.now();
+    const timeout = options?.timeoutMs || 10000;
     const commandPayload: DeviceCommand = {
       ...command,
       senderId: uid,
       createdAt: now,
-      expiresAt: command.expiresAt || now + 10000, // 10s default TTL
+      expiresAt: command.expiresAt || now + timeout,
       status: 'pending',
     };
 
@@ -282,11 +494,15 @@ export class FirebaseRealtimeService implements IRealtimeService {
 
   subscribeToCommandStatus(
     commandId: string,
-    callback: (ack: CommandAcknowledgment) => void
+    callback: (ack: CommandAcknowledgment) => void,
+    timeoutMs?: number
   ): () => void {
     const { rtdb } = this.getServices();
     const roomCode = this.ensureConnectedRoom();
     this.ensureAuthUid();
+
+    let isCompleted = false;
+    let timer: any = null;
 
     const ackRef: DatabaseReference = ref(rtdb, `rooms/${roomCode}/commands/${commandId}`);
     const unsubscribe = onValue(
@@ -295,8 +511,12 @@ export class FirebaseRealtimeService implements IRealtimeService {
         if (!snapshot.exists()) return;
         const cmd = snapshot.val() as DeviceCommand;
         if (cmd.acknowledgment) {
+          isCompleted = true;
+          if (timer) clearTimeout(timer);
           callback(cmd.acknowledgment);
         } else if (cmd.status && cmd.status !== 'pending') {
+          isCompleted = true;
+          if (timer) clearTimeout(timer);
           callback({
             commandId,
             status: cmd.status,
@@ -310,7 +530,26 @@ export class FirebaseRealtimeService implements IRealtimeService {
       }
     );
 
-    this.activeSubscriptions.push(unsubscribe);
-    return unsubscribe;
+    if (timeoutMs && timeoutMs > 0) {
+      timer = setTimeout(() => {
+        if (!isCompleted) {
+          callback({
+            commandId,
+            status: 'timed_out',
+            acknowledgedAt: Date.now(),
+            acknowledgedBy: 'system',
+            resultMessage: `Command timed out after ${timeoutMs}ms`,
+          });
+        }
+      }, timeoutMs);
+    }
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    };
+
+    this.activeSubscriptions.push(cleanup);
+    return cleanup;
   }
 }

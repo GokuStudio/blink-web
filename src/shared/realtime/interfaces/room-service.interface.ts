@@ -28,4 +28,5 @@ export interface IRoomService {
   subscribeToRoom(roomCode: string, callback: (room: DemoRoom | null) => void): () => void;
   subscribeToMembers(roomCode: string, callback: (members: Record<string, RoomMember>) => void): () => void;
   leaveRoom(roomCode: string): Promise<void>;
+  closeRoom(roomCode: string): Promise<void>;
 }

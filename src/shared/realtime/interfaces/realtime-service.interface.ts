@@ -5,6 +5,7 @@ import {
   ConnectionStatus,
   CommandAcknowledgment,
   CommandExecutionStatus,
+  UserPresence,
 } from '@/shared/contracts';
 
 /**
@@ -15,6 +16,12 @@ export interface IRealtimeService {
   connect(roomCode: string, clientId?: string): Promise<boolean>;
   disconnect(): Promise<void>;
   getConnectionStatus(): ConnectionStatus;
+  onConnectionStatusChange(callback: (status: ConnectionStatus) => void): () => void;
+
+  // Presence
+  subscribeToPresence(callback: (presenceMap: Record<string, UserPresence>) => void): () => void;
+  getUserPresence(uid: string): Promise<UserPresence | null>;
+  isDeviceOnline(deviceUid?: string): Promise<boolean>;
 
   // Device State
   subscribeToDeviceState(callback: (state: DeviceState) => void): () => void;
@@ -27,7 +34,11 @@ export interface IRealtimeService {
 
   // Commands
   subscribeToCommands(callback: (command: DeviceCommand) => void): () => void;
-  sendCommand(command: DeviceCommand): Promise<boolean>;
+  sendCommand(command: DeviceCommand, options?: { timeoutMs?: number }): Promise<boolean>;
   acknowledgeCommand(commandId: string, status: CommandExecutionStatus, resultMessage?: string): Promise<void>;
-  subscribeToCommandStatus(commandId: string, callback: (ack: CommandAcknowledgment) => void): () => void;
+  subscribeToCommandStatus(
+    commandId: string,
+    callback: (ack: CommandAcknowledgment) => void,
+    timeoutMs?: number
+  ): () => void;
 }
