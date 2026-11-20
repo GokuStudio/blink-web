@@ -1,6 +1,7 @@
 import React from 'react';
 import { EyeCanvas } from './EyeCanvas';
 import { useDeviceStore } from '../state';
+import { useWellnessStore } from '../wellness/wellnessStore';
 import { BlinkExpressionType } from '@/shared/contracts';
 
 interface DeviceShellProps {
@@ -14,6 +15,7 @@ interface DeviceShellProps {
  * Blink Device Shell
  * Implements Section 4 Visual Architecture:
  * - Desktop integrated: Layer 1 (Black bg) + Layer 2 (WebGL Canvas) + Layer 3 (Static Transparent Bezel overlay)
+ *   Uses the unified 1:1 Square Coordinate System derived from the 1024x1024 reference image.
  * - Standalone device: Fullscreen WebGL display, bezel completely omitted.
  */
 export const DeviceShell: React.FC<DeviceShellProps> = ({
@@ -27,6 +29,7 @@ export const DeviceShell: React.FC<DeviceShellProps> = ({
   const expression = propExpression ?? storeExpression;
 
   const handleNudgeComplete = () => {
+    useWellnessStore.getState().onNudgeFinished();
     if (expression === 'nudging') {
       setStoreExpression('idle');
     }
@@ -41,33 +44,35 @@ export const DeviceShell: React.FC<DeviceShellProps> = ({
         <EyeCanvas
           expression={expression}
           className="w-full h-full"
+          isStandalone={true}
           onNudgeComplete={handleNudgeComplete}
         />
       </div>
     );
   }
 
-  // Desktop Integrated Composition matching Reference 4
-  // Device aspect ratio is 840 / 980 (~6:7)
-  // Bezel screen opening is: left: 14.05%, top: 7.76%, width: 72.14%, height: 72.04%
+  // Desktop Integrated Composition:
+  // Strict 1:1 Square aspect ratio matching the 1024x1024 reference.
+  // Both Layer 2 (WebGL Canvas) and Layer 3 (Bezel PNG) share the exact same square viewport.
   return (
     <div
-      className={`relative w-full aspect-[840/980] max-w-sm sm:max-w-md mx-auto rounded-3xl overflow-hidden bg-black shadow-2xl ${className}`}
+      className={`relative w-full aspect-square max-w-sm sm:max-w-md mx-auto rounded-3xl overflow-hidden bg-black shadow-2xl select-none ${className}`}
       data-testid="device-shell-desktop"
     >
       {/* Layer 1: Solid Pitch Black Base */}
-      <div className="absolute inset-0 bg-[#080A0C] z-0" />
+      <div className="absolute inset-0 bg-black z-0" />
 
-      {/* Layer 2: WebGL Animated Eyes Canvas positioned within the bezel aperture */}
-      <div className="absolute left-[14%] top-[7.7%] w-[72.2%] h-[72.1%] rounded-[56px] overflow-hidden z-1 bg-black">
+      {/* Layer 2: WebGL Animated Eyes Canvas covering the full square viewport */}
+      <div className="absolute inset-0 z-1 bg-black overflow-hidden">
         <EyeCanvas
           expression={expression}
           className="w-full h-full"
+          isStandalone={false}
           onNudgeComplete={handleNudgeComplete}
         />
       </div>
 
-      {/* Layer 3: Physical Bezel Overlay (Static Image Asset from Production Reference) */}
+      {/* Layer 3: Physical Bezel Overlay (Square 1024x1024 transparent PNG asset) */}
       <img
         src="/assets/bezel/bezel.png"
         alt="Blink Physical Bezel"

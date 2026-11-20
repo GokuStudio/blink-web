@@ -373,7 +373,7 @@ export class FirebaseRealtimeService implements IRealtimeService {
     const telemetryRef = ref(rtdb, `rooms/${roomCode}/telemetry`);
     await set(telemetryRef, {
       ...telemetry,
-      isSimulated: true,
+      isSimulated: telemetry.isSimulated !== undefined ? telemetry.isSimulated : true,
       timestamp: Date.now(),
     });
   }
