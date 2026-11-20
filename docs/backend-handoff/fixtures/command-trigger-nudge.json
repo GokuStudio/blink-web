@@ -1,0 +1,14 @@
+{
+  "id": "cmd-nudge-002",
+  "schemaVersion": 1,
+  "targetDeviceId": "sample-device-uid",
+  "senderId": "sample-controller-uid",
+  "type": "TRIGGER_NUDGE",
+  "payload": {
+    "urgency": "medium",
+    "reason": "low_blink_rate"
+  },
+  "createdAt": 1795185080000,
+  "expiresAt": 1795185140000,
+  "status": "pending"
+}

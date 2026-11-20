@@ -1,0 +1,10 @@
+{
+  "id": "nudge-evt-001",
+  "schemaVersion": 1,
+  "timestamp": 1795185330000,
+  "urgency": "medium",
+  "reason": "low_blink_rate",
+  "message": "Blink rate dropped to 7 bpm. Please take a 20-second break.",
+  "acknowledged": true,
+  "acknowledgedAt": 1795185334000
+}

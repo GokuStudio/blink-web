@@ -1,0 +1,15 @@
+{
+  "sample-device-uid": {
+    "uid": "sample-device-uid",
+    "role": "blink-device",
+    "joinedAt": 1795185000000,
+    "status": "connected"
+  },
+  "sample-controller-uid": {
+    "uid": "sample-controller-uid",
+    "role": "companion-insights",
+    "inviteCode": "PAIR-4921",
+    "joinedAt": 1795185060000,
+    "status": "connected"
+  }
+}

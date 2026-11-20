@@ -1,0 +1,73 @@
+{
+  "roomCode": "BLINK-DEMO-001",
+  "schemaVersion": 1,
+  "createdAt": 1795185000000,
+  "createdBy": "sample-device-uid",
+  "expiresAt": 1795271400000,
+  "status": "active",
+  "deviceState": {
+    "schemaVersion": 1,
+    "revision": 1,
+    "deviceId": "sample-blink-device",
+    "deviceName": "Blink [BLINK-DEMO-001]",
+    "status": "connected",
+    "brightness": 1.0,
+    "expression": {
+      "current": "idle",
+      "targetExpression": "idle",
+      "transitionProgress": 1.0,
+      "intensity": 1.0,
+      "gaze": { "x": 0, "y": 0 },
+      "isBlinking": false,
+      "blinkFrequencyPerMin": 18,
+      "lastChangedAt": 1795185000000
+    },
+    "monitoring": {
+      "mode": "idle",
+      "sessionDurationSeconds": 0,
+      "totalBlinksDetected": 0,
+      "isSimulated": true,
+      "sampleIntervalMs": 1000,
+      "lastSampleTimestamp": 1795185000000
+    },
+    "nudgeConfig": {
+      "enabled": true,
+      "intervalMinutes": 20,
+      "thresholdLowBlinkRate": 12,
+      "soundEnabled": false,
+      "hapticEnabled": true,
+      "autoDismissSeconds": 5
+    },
+    "latestTelemetry": {
+      "eventId": "telemetry-init",
+      "schemaVersion": 1,
+      "timestamp": 1795185000000,
+      "isSimulated": true,
+      "currentBlinkRatePerMinute": 16,
+      "averageBlinkRatePerMinute": 18,
+      "eyeFatigueScore": 18,
+      "eyeHealthScore": 92
+    },
+    "updatedAt": 1795185000000
+  },
+  "members": {
+    "sample-device-uid": {
+      "uid": "sample-device-uid",
+      "role": "blink-device",
+      "joinedAt": 1795185000000,
+      "status": "connected"
+    }
+  },
+  "invitations": {
+    "PAIR-4921": {
+      "id": "PAIR-4921",
+      "roomId": "BLINK-DEMO-001",
+      "role": "companion-insights",
+      "createdAt": 1795185000000,
+      "expiresAt": 1795185600000,
+      "consumed": false,
+      "consumedBy": null,
+      "consumedAt": null
+    }
+  }
+}

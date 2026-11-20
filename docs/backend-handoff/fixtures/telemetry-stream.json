@@ -1,0 +1,41 @@
+[
+  {
+    "eventId": "tel-stream-101",
+    "schemaVersion": 1,
+    "timestamp": 1795185200000,
+    "isSimulated": true,
+    "deviceId": "sample-blink-device",
+    "blinkCount": 20,
+    "sessionDurationSeconds": 60,
+    "currentBlinkRatePerMinute": 18,
+    "averageBlinkRatePerMinute": 18,
+    "eyeFatigueScore": 10,
+    "eyeHealthScore": 96
+  },
+  {
+    "eventId": "tel-stream-102",
+    "schemaVersion": 1,
+    "timestamp": 1795185260000,
+    "isSimulated": true,
+    "deviceId": "sample-blink-device",
+    "blinkCount": 38,
+    "sessionDurationSeconds": 120,
+    "currentBlinkRatePerMinute": 16,
+    "averageBlinkRatePerMinute": 17,
+    "eyeFatigueScore": 15,
+    "eyeHealthScore": 93
+  },
+  {
+    "eventId": "tel-stream-103",
+    "schemaVersion": 1,
+    "timestamp": 1795185320000,
+    "isSimulated": true,
+    "deviceId": "sample-blink-device",
+    "blinkCount": 47,
+    "sessionDurationSeconds": 180,
+    "currentBlinkRatePerMinute": 9,
+    "averageBlinkRatePerMinute": 14,
+    "eyeFatigueScore": 48,
+    "eyeHealthScore": 72
+  }
+]

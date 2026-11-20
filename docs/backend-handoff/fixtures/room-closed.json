@@ -1,0 +1,10 @@
+{
+  "roomCode": "BLINK-DEMO-001",
+  "schemaVersion": 1,
+  "createdAt": 1795185000000,
+  "createdBy": "sample-device-uid",
+  "expiresAt": 1795271400000,
+  "status": "closed",
+  "closedAt": 1795187000000,
+  "closedBy": "sample-device-uid"
+}

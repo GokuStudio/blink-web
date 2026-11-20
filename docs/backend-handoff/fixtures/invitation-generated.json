@@ -1,0 +1,10 @@
+{
+  "id": "PAIR-4921",
+  "roomId": "BLINK-DEMO-001",
+  "role": "companion-insights",
+  "createdAt": 1795185000000,
+  "expiresAt": 1795185600000,
+  "consumed": false,
+  "consumedBy": null,
+  "consumedAt": null
+}

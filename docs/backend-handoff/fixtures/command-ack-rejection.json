@@ -1,0 +1,22 @@
+{
+  "id": "cmd-exp-002",
+  "schemaVersion": 1,
+  "targetDeviceId": "sample-device-uid",
+  "senderId": "sample-controller-uid",
+  "type": "SET_EXPRESSION",
+  "payload": {
+    "expression": "invalid-exp"
+  },
+  "createdAt": 1795185070000,
+  "expiresAt": 1795185130000,
+  "status": "rejected",
+  "acknowledged": true,
+  "acknowledgedAt": 1795185071000,
+  "acknowledgment": {
+    "commandId": "cmd-exp-002",
+    "status": "rejected",
+    "acknowledgedAt": 1795185071000,
+    "acknowledgedBy": "sample-device-uid",
+    "resultMessage": "Unsupported expression type"
+  }
+}

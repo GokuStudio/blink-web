@@ -1,0 +1,14 @@
+{
+  "id": "cmd-exp-001",
+  "schemaVersion": 1,
+  "targetDeviceId": "sample-device-uid",
+  "senderId": "sample-controller-uid",
+  "type": "SET_EXPRESSION",
+  "payload": {
+    "expression": "happy",
+    "durationSeconds": 5
+  },
+  "createdAt": 1795185060000,
+  "expiresAt": 1795185120000,
+  "status": "pending"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "cmd-exp-003",
+  "schemaVersion": 1,
+  "targetDeviceId": "sample-device-uid",
+  "senderId": "sample-controller-uid",
+  "type": "SET_EXPRESSION",
+  "payload": {
+    "expression": "sleepy"
+  },
+  "createdAt": 1795185000000,
+  "expiresAt": 1795185005000,
+  "status": "expired",
+  "acknowledged": true,
+  "acknowledgedAt": 1795185010000,
+  "acknowledgment": {
+    "commandId": "cmd-exp-003",
+    "status": "expired",
+    "acknowledgedAt": 1795185010000,
+    "acknowledgedBy": "sample-device-uid",
+    "resultMessage": "Command expired before processing"
+  }
+}
