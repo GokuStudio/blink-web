@@ -1,0 +1,195 @@
+/*
+ * Blink Elevated Scoped Design System
+ *
+ * All tokens, base resets, typography, and surface primitives are scoped inside
+ * `.blink-elevated-scope` so Blink Web routes (/demo, /device, /join, Navbar,
+ * and preserved InsightsShell) remain 100% unaffected.
+ *
+ * Portaled overlays (PortalSheet, toast) mounted on document.body also carry
+ * `.blink-elevated-scope` so they inherit all tokens and typography cleanly.
+ */
+
+.blink-elevated-scope {
+  /* Core Matte Ceramic & Anodized Surfaces */
+  --bg-stage: #070808;
+  --bg-canvas: #0d0f0e;
+  --surface-chassis: #151817;
+  --surface-elevated: #1b1e1c;
+  --surface-well: #090b0a;
+  --surface-control: #222624;
+
+  /* Precious Signature Accents */
+  --lime: #a6fa4c;
+  --lime-soft: rgba(166, 250, 76, 0.14);
+  --amber: #f0b45a;
+  --amber-soft: rgba(240, 180, 90, 0.14);
+  --coral: #e87461;
+  --cyan-eye: #7ce8ff;
+
+  /* Mineral Typography */
+  --ink-primary: #f2f4f1;
+  --ink-secondary: #98a09a;
+  --ink-tertiary: #6a726d;
+  --ink-on-lime: #0d1308;
+
+  /* Fine Catch-lights & Hairlines */
+  --rim-light: rgba(255, 255, 255, 0.08);
+  --rim-hairline: rgba(255, 255, 255, 0.05);
+
+  color: var(--ink-primary);
+  font-family: "Google Sans", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+}
+
+@layer base {
+  .blink-elevated-scope,
+  .blink-elevated-scope *,
+  .blink-elevated-scope *::before,
+  .blink-elevated-scope *::after {
+    box-sizing: border-box;
+    border-color: transparent;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .blink-elevated-scope button,
+  .blink-elevated-scope input,
+  .blink-elevated-scope textarea {
+    font-family: inherit;
+  }
+
+  .blink-elevated-scope input,
+  .blink-elevated-scope textarea {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+}
+
+.blink-elevated-scope .font-display {
+  font-family: "Google Sans", "Plus Jakarta Sans", -apple-system, sans-serif;
+}
+
+.blink-elevated-scope .font-num,
+.blink-elevated-scope .font-mono-num {
+  font-family: "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.blink-elevated-scope .tabular-nums {
+  font-family: "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.blink-elevated-scope .no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.blink-elevated-scope .no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Tactile anodized surface with subtle machined top catch-light */
+.blink-elevated-scope .surface-instrument {
+  background: linear-gradient(180deg, #181b19 0%, #131615 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 12px 28px rgba(0, 0, 0, 0.38);
+}
+
+/* Delicately recessed optical well inspired by precision hardware */
+.blink-elevated-scope .surface-well {
+  background: linear-gradient(180deg, #090b0a 0%, #0e100f 100%);
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  box-shadow:
+    inset 0 2px 10px rgba(0, 0, 0, 0.72),
+    0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* Tactile ceramic pill control */
+.blink-elevated-scope .surface-tactile {
+  background: linear-gradient(180deg, #252927 0%, #1d201e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* Primary lime instrument CTA */
+.blink-elevated-scope .btn-lime-tactile {
+  background: linear-gradient(180deg, #b3ff61 0%, #98f03d 100%);
+  color: var(--ink-on-lime);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 10px 26px rgba(166, 250, 76, 0.28),
+    0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.blink-elevated-scope .btn-lime-tactile:active {
+  transform: scale(0.98);
+}
+
+/* Subtle press feedback */
+.blink-elevated-scope .press-tactile {
+  transition:
+    transform 130ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
+}
+
+.blink-elevated-scope .press-tactile:active {
+  transform: scale(0.97);
+}
+
+/* Ambient breathing reserved strictly for Blink companion presence */
+@keyframes blink-companion-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.035);
+    opacity: 1;
+  }
+}
+
+.blink-elevated-scope .animate-companion-breathe {
+  animation: blink-companion-breathe 5.2s ease-in-out infinite;
+}
+
+/* Periodic 5-second left-to-right light shimmer inviting swipe interaction */
+@keyframes swipe-light-sweep {
+  0% {
+    transform: translateX(-140%) skewX(-18deg);
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  20% {
+    transform: translateX(460%) skewX(-18deg);
+    opacity: 1;
+  }
+  24%,
+  100% {
+    transform: translateX(460%) skewX(-18deg);
+    opacity: 0;
+  }
+}
+
+.blink-elevated-scope .animate-swipe-shimmer {
+  animation: swipe-light-sweep 5s cubic-bezier(0.32, 0.08, 0.24, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blink-elevated-scope .animate-companion-breathe,
+  .blink-elevated-scope .animate-swipe-shimmer {
+    animation: none !important;
+  }
+  .blink-elevated-scope .press-tactile {
+    transition: none !important;
+  }
+}

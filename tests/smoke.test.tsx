@@ -34,7 +34,7 @@ describe('Blink Routes Smoke Tests', () => {
     expect(screen.getByTestId('eye-canvas-placeholder')).toBeInTheDocument();
   });
 
-  it('renders InsightsPage standalone companion dashboard', () => {
+  it('renders InsightsPage with Elevated companion experience by default', async () => {
     render(
       <MemoryRouter initialEntries={['/insights']}>
         <Routes>
@@ -44,6 +44,20 @@ describe('Blink Routes Smoke Tests', () => {
     );
 
     expect(screen.getByTestId('insights-page')).toBeInTheDocument();
+    expect(await screen.findByTestId('insights-elevated-app')).toBeInTheDocument();
+  });
+
+  it('preserves classic InsightsShell via /insights?mode=classic', () => {
+    render(
+      <MemoryRouter initialEntries={['/insights?mode=classic']}>
+        <Routes>
+          <Route path="/insights" element={<InsightsPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('insights-page')).toBeInTheDocument();
+    expect(screen.getByTestId('insights-shell')).toBeInTheDocument();
     expect(screen.getByText(/BLINK INSIGHTS/i)).toBeInTheDocument();
   });
 
