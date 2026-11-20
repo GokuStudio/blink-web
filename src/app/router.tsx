@@ -3,8 +3,9 @@ import { DemoPage } from '@/pages/DemoPage';
 import { DevicePage } from '@/pages/DevicePage';
 import { InsightsPage } from '@/pages/InsightsPage';
 import { JoinPage } from '@/pages/JoinPage';
+import { DevHarnessPage } from '@/pages/DevHarnessPage';
 
-export const router = createBrowserRouter([
+const routes = [
   {
     path: '/',
     element: <Navigate to="/demo" replace />,
@@ -25,8 +26,18 @@ export const router = createBrowserRouter([
     path: '/join/:roomCode',
     element: <JoinPage />,
   },
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/dev-harness',
+          element: <DevHarnessPage />,
+        },
+      ]
+    : []),
   {
     path: '*',
     element: <Navigate to="/demo" replace />,
   },
-]);
+];
+
+export const router = createBrowserRouter(routes);

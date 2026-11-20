@@ -8,6 +8,9 @@ export interface DeviceTelemetry {
   schemaVersion: number; // 1
   timestamp: number;
   isSimulated: boolean; // Explicit separation between simulated and real measurements
+  deviceId?: string;
+  blinkCount?: number;
+  sessionDurationSeconds?: number;
   
   // Blink metrics
   currentBlinkRatePerMinute: number;

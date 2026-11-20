@@ -6,6 +6,7 @@ export interface AppEnv {
   isDev: boolean;
   isProd: boolean;
   useEmulators: boolean;
+  isProductionFirebaseEnabled: boolean;
   defaultRoom: string;
   autoStartSimulator: boolean;
   firebase: {
@@ -19,14 +20,19 @@ export interface AppEnv {
   };
 }
 
+const rawApiKey = import.meta.env.VITE_FIREBASE_API_KEY || 'mock-api-key';
+const isMockApiKey = !rawApiKey || rawApiKey.startsWith('mock-');
+const isExplicitProductionEnabled = import.meta.env.VITE_ENABLE_PRODUCTION_FIREBASE === 'true';
+
 export const env: AppEnv = {
   isDev: import.meta.env.DEV,
   isProd: import.meta.env.PROD,
   useEmulators: import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true',
+  isProductionFirebaseEnabled: !isMockApiKey && isExplicitProductionEnabled,
   defaultRoom: import.meta.env.VITE_DEMO_DEFAULT_ROOM || 'BLINK-DEMO',
   autoStartSimulator: import.meta.env.VITE_SIMULATOR_AUTO_START === 'true',
   firebase: {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'mock-api-key',
+    apiKey: rawApiKey,
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'blink-web-demo.firebaseapp.com',
     projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'blink-web-demo',
     storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'blink-web-demo.appspot.com',

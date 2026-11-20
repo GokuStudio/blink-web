@@ -4,16 +4,77 @@
     ".write": false,
     "rooms": {
       "$roomId": {
-        // Read allowed if user is authenticated
-        ".read": "auth != null",
-        // Write allowed for members or room creation
-        ".write": "auth != null && (!data.exists() || data.child('members').child(auth.uid).exists() || newData.child('members').child(auth.uid).exists())",
-        "state": {
-          ".validate": "newData.hasChildren(['revision', 'updatedAt'])"
+        // Read: ONLY authenticated members of THIS room can read room data
+        ".read": "auth != null && data.child('members').child(auth.uid).exists()",
+
+        // Room Creation Write: Only allowed when room doesn't exist yet, by the authenticated creator
+        ".write": "!data.exists() && auth != null && newData.child('createdBy').val() === auth.uid && newData.child('members').child(auth.uid).exists() && (newData.child('members').child(auth.uid).child('role').val() === 'blink-device' || newData.child('members').child(auth.uid).child('role').val() === 'integrated-demo') && newData.child('expiresAt').val() > now",
+
+        // Owner can close an active room
+        "status": {
+          ".write": "auth != null && root.child('rooms').child($roomId).child('createdBy').val() === auth.uid && newData.val() === 'closed'"
         },
+
+        "closedAt": {
+          ".write": "auth != null && root.child('rooms').child($roomId).child('createdBy').val() === auth.uid"
+        },
+
+        "closedBy": {
+          ".write": "auth != null && root.child('rooms').child($roomId).child('createdBy').val() === auth.uid && newData.val() === auth.uid"
+        },
+
+        // Room Members Management
+        "members": {
+          "$uid": {
+            // Write: Allowed for:
+            // 1. Existing member updating their own status (cannot change or escalate role!)
+            // 2. New member joining with a valid, unconsumed, unexpired invitation while room is active
+            ".write": "auth != null && auth.uid === $uid && ((data.exists() && newData.child('role').val() === data.child('role').val()) || (!data.exists() && newData.child('inviteCode').exists() && root.child('rooms').child($roomId).child('status').val() !== 'closed' && root.child('rooms').child($roomId).child('expiresAt').val() > now && root.child('rooms').child($roomId).child('invitations').child(newData.child('inviteCode').val()).exists() && root.child('rooms').child($roomId).child('invitations').child(newData.child('inviteCode').val()).child('consumed').val() === false && root.child('rooms').child($roomId).child('invitations').child(newData.child('inviteCode').val()).child('expiresAt').val() > now && newData.child('role').val() === root.child('rooms').child($roomId).child('invitations').child(newData.child('inviteCode').val()).child('role').val()))",
+            ".validate": "newData.hasChildren(['uid', 'role', 'joinedAt', 'status']) && (newData.child('role').val() === 'blink-device' || newData.child('role').val() === 'companion-insights' || newData.child('role').val() === 'integrated-demo')"
+          }
+        },
+
+        // Short-lived Pairing Invitations
+        "invitations": {
+          "$inviteCode": {
+            // Read: Members of room OR an unconsumed, unexpired invite queried by exact inviteCode
+            ".read": "auth != null && (root.child('rooms').child($roomId).child('members').child(auth.uid).exists() || (data.exists() && data.child('consumed').val() === false && data.child('expiresAt').val() > now))",
+            // Write: Allowed only while room is active (not closed and not expired)
+            ".write": "auth != null && root.child('rooms').child($roomId).child('status').val() !== 'closed' && root.child('rooms').child($roomId).child('expiresAt').val() > now && ((!data.exists() && (root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'blink-device' || root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'integrated-demo') && newData.child('expiresAt').val() > now && newData.child('consumed').val() === false) || (data.exists() && data.child('consumed').val() === false && data.child('expiresAt').val() > now && newData.child('consumed').val() === true && newData.child('consumedBy').val() === auth.uid && newData.child('role').val() === data.child('role').val() && newData.child('expiresAt').val() === data.child('expiresAt').val()))",
+            ".validate": "newData.hasChildren(['id', 'roomId', 'role', 'createdAt', 'expiresAt', 'consumed'])"
+          }
+        },
+
+        // Presence Subtree: Multi-connection, onDisconnect tracking, and Heartbeats
+        "presence": {
+          ".read": "auth != null && root.child('rooms').child($roomId).child('members').child(auth.uid).exists()",
+          "$uid": {
+            // Write: User can only write their own presence in rooms they belong to while room is active
+            ".write": "auth != null && auth.uid === $uid && root.child('rooms').child($roomId).child('members').child(auth.uid).exists() && root.child('rooms').child($roomId).child('status').val() !== 'closed' && root.child('rooms').child($roomId).child('expiresAt').val() > now",
+            ".validate": "!newData.hasChild('role') || newData.child('role').val() === root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val()"
+          }
+        },
+
+        // Device State (Blink Eyes Display State)
+        "state": {
+          ".write": "auth != null && root.child('rooms').child($roomId).child('status').val() !== 'closed' && root.child('rooms').child($roomId).child('expiresAt').val() > now && (root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'blink-device' || root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'integrated-demo')",
+          ".validate": "newData.hasChildren(['revision', 'updatedAt']) && (!data.exists() || newData.child('revision').val() > data.child('revision').val())"
+        },
+
+        // Transient Device Telemetry (Latest-Value Model)
+        "telemetry": {
+          ".read": "auth != null && root.child('rooms').child($roomId).child('members').child(auth.uid).exists()",
+          ".write": "auth != null && root.child('rooms').child($roomId).child('status').val() !== 'closed' && root.child('rooms').child($roomId).child('expiresAt').val() > now && (root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'blink-device' || root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'integrated-demo')",
+          ".validate": "newData.child('isSimulated').val() === true && newData.hasChildren(['timestamp', 'isSimulated', 'currentBlinkRatePerMinute'])"
+        },
+
+        // Device Commands (Dispatched from Companion Insights & Acknowledged by Device)
         "commands": {
           "$commandId": {
-            ".validate": "newData.hasChildren(['id', 'type', 'targetDeviceId', 'createdAt'])"
+            ".read": "auth != null && root.child('rooms').child($roomId).child('members').child(auth.uid).exists()",
+            // Commands only accepted while room is active and not expired
+            ".write": "auth != null && root.child('rooms').child($roomId).child('status').val() !== 'closed' && root.child('rooms').child($roomId).child('expiresAt').val() > now && ((!data.exists() && (root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'companion-insights' || root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'integrated-demo') && newData.child('senderId').val() === auth.uid && newData.child('expiresAt').val() > now && newData.child('createdAt').val() <= now + 5000) || (data.exists() && (root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'blink-device' || root.child('rooms').child($roomId).child('members').child(auth.uid).child('role').val() === 'integrated-demo') && newData.child('senderId').val() === data.child('senderId').val() && newData.child('id').val() === data.child('id').val() && newData.child('type').val() === data.child('type').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('expiresAt').val() === data.child('expiresAt').val()))",
+            ".validate": "newData.hasChildren(['id', 'type', 'targetDeviceId', 'createdAt', 'expiresAt', 'senderId'])"
           }
         }
       }

@@ -1,10 +1,12 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Eye, Activity, Monitor, Compass } from 'lucide-react';
+import { Eye, Activity, Monitor, Compass, ShieldCheck } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
+import { useAuth } from '@/shared/hooks/useAuth';
 
 export const Navbar: React.FC = () => {
   const location = useLocation();
+  const { userId, isAuthenticated } = useAuth();
 
   const navItems = [
     { path: '/demo', label: 'Demo Mode', icon: Monitor },
@@ -28,27 +30,42 @@ export const Navbar: React.FC = () => {
         </Link>
 
         {/* Navigation Tabs */}
-        <nav className="flex items-center gap-1 sm:gap-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname.startsWith(item.path.split('/')[1] ? `/${item.path.split('/')[1]}` : item.path);
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-[#171A1D] text-white border border-[#272E36]'
-                    : 'text-neutral-400 hover:text-white hover:bg-[#171A1D]/50'
-                )}
-              >
-                <Icon className={cn('w-4 h-4', isActive ? 'text-[#35DFFF]' : 'text-neutral-400')} />
-                <span className="hidden md:inline">{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="flex items-center gap-2 sm:gap-4">
+          <nav className="flex items-center gap-1 sm:gap-2">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname.startsWith(
+                item.path.split('/')[1] ? `/${item.path.split('/')[1]}` : item.path
+              );
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-[#171A1D] text-white border border-[#272E36]'
+                      : 'text-neutral-400 hover:text-white hover:bg-[#171A1D]/50'
+                  )}
+                >
+                  <Icon className={cn('w-4 h-4', isActive ? 'text-[#35DFFF]' : 'text-neutral-400')} />
+                  <span className="hidden md:inline">{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Auth Session Status Pill */}
+          <div
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#171A1D] border border-[#272E36] text-[11px]"
+            title={userId ? `Authenticated User ID: ${userId}` : 'Connecting auth...'}
+          >
+            <ShieldCheck className={cn('w-3.5 h-3.5', isAuthenticated ? 'text-[#9AEA3F]' : 'text-neutral-500')} />
+            <span className="font-mono text-neutral-300">
+              {userId ? `${userId.slice(0, 7)}...` : 'Connecting'}
+            </span>
+          </div>
+        </div>
       </div>
     </header>
   );
