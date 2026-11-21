@@ -23,6 +23,10 @@ interface InsightsViewProps {
   onSelectComfort: (choice: ComfortChoice) => void;
   onStartRitual: (kind: RitualKind) => void;
   extraBreaks: number;
+  mode?: 'LIVE' | 'DEMO' | 'OFFLINE';
+  liveAvgRate?: number;
+  liveSessionSeconds?: number;
+  liveTotalBlinks?: number;
 }
 
 export const InsightsView: React.FC<InsightsViewProps> = ({
@@ -32,6 +36,10 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
   onSelectComfort,
   onStartRitual,
   extraBreaks,
+  mode = 'DEMO',
+  liveAvgRate,
+  liveSessionSeconds,
+  liveTotalBlinks,
 }) => {
   const [sessionOpen, setSessionOpen] = useState(false);
   const dataset = INSIGHTS_DATASETS[range];
@@ -40,9 +48,14 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
     dataset.breaksCompleted + (range === 'today' ? extraBreaks : 0)
   );
 
+  const effectiveAvgRate =
+    range === 'today' && liveAvgRate !== undefined && liveAvgRate > 0
+      ? liveAvgRate
+      : dataset.avgRate;
+
   // Baseline vernier positions (scale 10 -> 22 blinks/min)
   const clampPct = (v: number) => Math.min(96, Math.max(4, ((v - 10) / 12) * 100));
-  const currentPct = clampPct(dataset.avgRate);
+  const currentPct = clampPct(effectiveAvgRate);
   const baselinePct = clampPct(dataset.baseline);
 
   const renderComfortFace = (id: ComfortChoice, selected: boolean) => {
@@ -139,7 +152,11 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
             Eye Rhythm
           </h1>
           <span className="font-mono-num text-[10px] text-[#737B76]">
-            SIMULATED TELEMETRY
+            {mode === 'LIVE'
+              ? 'LIVE SESSION · REFERENCE HISTORY'
+              : mode === 'OFFLINE'
+                ? 'OFFLINE · REFERENCE HISTORY'
+                : 'SIMULATED TELEMETRY'}
           </span>
         </div>
 
@@ -337,15 +354,23 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
                   </div>
                   <div className="rounded-[14px] surface-well p-3">
                     <div className="font-mono-num text-[16px] font-semibold text-[#F2F4F1]">
-                      {dataset.observedTime}
+                      {range === 'today' && liveSessionSeconds !== undefined && liveSessionSeconds > 0
+                        ? `${Math.floor(liveSessionSeconds / 60)}m ${liveSessionSeconds % 60}s`
+                        : dataset.observedTime}
                     </div>
                     <div className="mt-1 text-[10.5px] text-[#8C938E]">Observed</div>
                   </div>
                   <div className="rounded-[14px] surface-well p-3">
                     <div className="font-mono-num text-[16px] font-semibold text-[#A6FA4C]">
-                      {dataset.coverage}
+                      {range === 'today' && liveTotalBlinks !== undefined && liveTotalBlinks > 0
+                        ? `${liveTotalBlinks}`
+                        : dataset.coverage}
                     </div>
-                    <div className="mt-1 text-[10.5px] text-[#8C938E]">Coverage</div>
+                    <div className="mt-1 text-[10.5px] text-[#8C938E]">
+                      {range === 'today' && liveTotalBlinks !== undefined && liveTotalBlinks > 0
+                        ? 'Total Blinks'
+                        : 'Coverage'}
+                    </div>
                   </div>
                 </div>
               </motion.div>

@@ -19,6 +19,11 @@ interface SettingsViewProps {
   soundEnabled: boolean;
   onToggleSound: (next: boolean) => void;
   onShowToast: (msg: string) => void;
+  roomCode?: string;
+  mode?: 'LIVE' | 'DEMO' | 'OFFLINE';
+  monitoringMode?: string;
+  isStale?: boolean;
+  onSwitchRoom?: (newRoom: string) => void;
 }
 
 const SENSITIVITY = ['Gentle', 'Adaptive', 'High'] as const;
@@ -57,6 +62,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   soundEnabled,
   onToggleSound,
   onShowToast,
+  roomCode = 'BLINK-DEMO',
+  mode = 'DEMO',
+  monitoringMode = 'active',
+  isStale = false,
+  onSwitchRoom,
 }) => {
   const [calibrating, setCalibrating] = useState(false);
   const [sensitivity, setSensitivity] = useState<(typeof SENSITIVITY)[number]>('Adaptive');
@@ -122,7 +132,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.04] border border-white/[0.06] px-3 py-1">
               <span
                 className={`h-[7px] w-[7px] rounded-full ${
-                  deviceConnected
+                  deviceConnected && mode !== 'OFFLINE'
                     ? 'bg-[#A6FA4C] shadow-[0_0_8px_rgba(166,250,76,0.75)]'
                     : 'bg-[#7A827D]'
                 }`}
@@ -130,8 +140,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="font-mono-num text-[10.5px] uppercase tracking-[0.07em] text-[#B0B8B2]">
                 {calibrating
                   ? 'Calibrating…'
-                  : deviceConnected
-                    ? 'Connected'
+                  : deviceConnected && mode !== 'OFFLINE'
+                    ? `${mode} · Connected`
                     : 'Disconnected'}
               </span>
             </div>
@@ -140,8 +150,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               Blink Desk Node 01
             </h2>
             <p className="font-mono-num mt-0.5 text-[11.5px] text-[#7F8782]">
-              Firmware v3.4.1 · Uptime 14h
+              Room: {roomCode} · Mode: {mode} {isStale ? '(Stale)' : ''} · Status: {monitoringMode}
             </p>
+            {onSwitchRoom && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = prompt('Enter Room Code', roomCode);
+                    if (next && next.trim()) onSwitchRoom(next.trim());
+                  }}
+                  className="press-tactile text-[11px] font-mono text-[#A6FA4C] hover:underline"
+                >
+                  [Change Room]
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

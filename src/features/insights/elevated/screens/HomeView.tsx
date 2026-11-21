@@ -28,6 +28,18 @@ interface HomeViewProps {
   hasUnread: boolean;
   breaksTaken: number;
   onShowToast: (msg: string) => void;
+
+  // Live Firebase Realtime Integration Props
+  mode?: 'LIVE' | 'DEMO' | 'OFFLINE';
+  totalBlinks?: number;
+  avgRate?: number;
+  sessionSeconds?: number;
+  isFaceDetected?: boolean;
+  isValidZero?: boolean;
+  isStale?: boolean;
+  isMonitoring?: boolean;
+  roomCode?: string;
+  lastSyncTimestamp?: number | null;
 }
 
 const BASELINE_RATE = 17;
@@ -53,55 +65,94 @@ export const HomeView: React.FC<HomeViewProps> = ({
   hasUnread,
   breaksTaken,
   onShowToast,
+  mode = 'DEMO',
+  totalBlinks: propTotalBlinks,
+  avgRate: propAvgRate,
+  sessionSeconds: propSessionSeconds,
+  isFaceDetected = true,
+  isValidZero = false,
+  isStale = false,
+  isMonitoring = true,
+  roomCode = 'BLINK-DEMO',
+  lastSyncTimestamp,
 }) => {
   const [simTrayOpen, setSimTrayOpen] = useState(false);
   const [cadenceInfoOpen, setCadenceInfoOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [bellRingKey, setBellRingKey] = useState(0);
 
-  // Live session telemetry counters driven coherently by active blink rate
-  const [sessionSeconds, setSessionSeconds] = useState(48 * 60 + 12);
-  const [totalBlinks, setTotalBlinks] = useState(642);
+  // Live session telemetry counters (fallback to local timer only in pure DEMO mode without props)
+  const [localSessionSeconds, setLocalSessionSeconds] = useState(48 * 60 + 12);
+  const [localTotalBlinks, setLocalTotalBlinks] = useState(642);
 
-  const isInactive = !connected || paused || blinkRate <= 0;
-  const zone = deriveBlinkZone(blinkRate, paused, connected, BASELINE_RATE);
+  const effectiveSessionSeconds =
+    propSessionSeconds !== undefined ? propSessionSeconds : localSessionSeconds;
+  const effectiveTotalBlinks =
+    propTotalBlinks !== undefined ? propTotalBlinks : localTotalBlinks;
+
+  const isInactive =
+    !connected || paused || (blinkRate <= 0 && !isValidZero) || mode === 'OFFLINE';
+
+  const zone = deriveBlinkZone(
+    blinkRate,
+    paused,
+    connected && mode !== 'OFFLINE',
+    BASELINE_RATE,
+    { isFaceDetected, isValidZero }
+  );
 
   useEffect(() => {
-    if (isInactive) return;
+    if (propSessionSeconds !== undefined || isInactive) return;
     const timer = window.setInterval(() => {
-      setSessionSeconds((s) => s + 1);
+      setLocalSessionSeconds((s) => s + 1);
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [isInactive]);
+  }, [isInactive, propSessionSeconds]);
 
   useEffect(() => {
-    if (isInactive) return;
+    if (propTotalBlinks !== undefined || isInactive) return;
     const msPerBlink = Math.max(1800, Math.round(60000 / Math.max(1, blinkRate)));
     const timer = window.setInterval(() => {
-      setTotalBlinks((b) => b + 1);
+      setLocalTotalBlinks((b) => b + 1);
     }, msPerBlink);
     return () => window.clearInterval(timer);
-  }, [blinkRate, isInactive]);
+  }, [blinkRate, isInactive, propTotalBlinks]);
 
   const activeTicks = isInactive
     ? 0
     : Math.min(20, Math.max(1, Math.round((blinkRate / 25) * 20)));
 
   const deltaDiff = blinkRate - BASELINE_RATE;
-  const deltaText = !connected
-    ? 'Desk Node 01 not in range'
-    : paused
-      ? 'Optical observation paused'
-      : deltaDiff === 0
-        ? `Matched with your usual ${BASELINE_RATE}`
-        : deltaDiff < 0
-          ? `${Math.abs(deltaDiff)} below your usual ${BASELINE_RATE}`
-          : `${deltaDiff} above your usual ${BASELINE_RATE}`;
+  const deltaText =
+    !connected || mode === 'OFFLINE'
+      ? isStale && lastSyncTimestamp
+        ? 'Telemetry stale (>3.5s)'
+        : 'Desk Node 01 offline'
+      : !isFaceDetected
+        ? 'Face not detected · Tracking paused'
+        : paused
+          ? 'Optical observation paused'
+          : isValidZero
+            ? 'Stare detected (0 BPM) · Fatigue alert'
+            : deltaDiff === 0
+              ? `Matched with your usual ${BASELINE_RATE}`
+              : deltaDiff < 0
+                ? `${Math.abs(deltaDiff)} below your usual ${BASELINE_RATE}`
+                : `${deltaDiff} above your usual ${BASELINE_RATE}`;
 
   // Derived coherent telemetry values for the 6-card grid
-  const avgRate = isInactive ? 0 : Number(((14.8 * 3 + blinkRate) / 4).toFixed(1));
-  const closureMs = isInactive ? null : Math.round(165 + Math.max(0, 20 - blinkRate) * 2.5);
-  const incompleteBlinks = isInactive ? 0 : blinkRate <= 14 ? 4 : 2;
+  const effectiveAvgRate =
+    propAvgRate !== undefined
+      ? propAvgRate
+      : isInactive
+        ? 0
+        : Number(((14.8 * 3 + blinkRate) / 4).toFixed(1));
+
+  const closureMs =
+    isInactive && !isValidZero
+      ? null
+      : Math.round(165 + Math.max(0, 20 - blinkRate) * 2.5);
+  const incompleteBlinks = isInactive && !isValidZero ? 0 : blinkRate <= 14 ? 4 : 2;
 
   const handlePrimaryAction = () => {
     if (!connected) {
@@ -162,8 +213,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </button>
 
         <div className="flex items-center gap-2">
-          <span className="font-mono-num rounded-full bg-white/[0.04] border border-white/[0.06] px-2 py-[4px] text-[9.5px] tracking-[0.06em] text-[#7E8681]">
-            DEMO
+          <span
+            data-testid="authenticity-mode-badge"
+            className={`font-mono-num rounded-full border px-2 py-[4px] text-[9.5px] tracking-[0.06em] font-semibold transition-colors ${
+              mode === 'LIVE'
+                ? 'bg-[#A6FA4C]/15 border-[#A6FA4C]/40 text-[#A6FA4C]'
+                : mode === 'OFFLINE'
+                  ? 'bg-red-500/15 border-red-500/30 text-red-400'
+                  : 'bg-white/[0.04] border-white/[0.06] text-[#7E8681]'
+            }`}
+          >
+            {mode}
           </span>
           <button
             type="button"
@@ -205,7 +265,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       </header>
 
-      {/* Progressive Disclosure: Live Blink Rate Simulator (Color adapts automatically from count) */}
+      {/* Progressive Disclosure: Live Blink Rate Simulator or Live Stream Status */}
       <AnimatePresence initial={false}>
         {simTrayOpen && (
           <motion.div
@@ -216,59 +276,76 @@ export const HomeView: React.FC<HomeViewProps> = ({
             className="overflow-hidden"
           >
             <div className="mt-3 rounded-[18px] surface-well p-3.5">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[#98A09A]">Simulate live blink count</span>
-                <span
-                  className="font-mono-num font-semibold"
-                  style={{ color: zone.accentHex }}
-                >
-                  {paused ? 'Paused' : `${blinkRate} /min · ${zone.shortLabel}`}
-                </span>
-              </div>
+              {mode === 'LIVE' ? (
+                <div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-[#A6FA4C] font-medium">Live Camera Feed</span>
+                    <span className="font-mono-num font-semibold text-[#A6FA4C]">
+                      {blinkRate} /min · {zone.shortLabel}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-[#8E9690]">
+                    Connected to room <span className="font-mono text-[#DCE0DD]">{roomCode}</span>.
+                    Telemetry is streamed live from camera eye tracking. Manual slider override is disabled in LIVE mode.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-[#98A09A]">Simulate live blink count</span>
+                    <span
+                      className="font-mono-num font-semibold"
+                      style={{ color: zone.accentHex }}
+                    >
+                      {paused ? 'Paused' : `${blinkRate} /min · ${zone.shortLabel}`}
+                    </span>
+                  </div>
 
-              <div className="mt-3 flex items-center gap-3">
-                <input
-                  type="range"
-                  min={2}
-                  max={25}
-                  value={blinkRate}
-                  disabled={!connected}
-                  onChange={(e) => {
-                    if (paused) onTogglePaused(false);
-                    onChangeBlinkRate(Number(e.target.value));
-                  }}
-                  aria-label="Simulate live blink rate"
-                  className="w-full accent-[#A6FA4C] cursor-pointer"
-                />
-                {connected ? (
-                  <button
-                    type="button"
-                    onClick={() => onTogglePaused(!paused)}
-                    className="surface-tactile press-tactile inline-flex h-[30px] shrink-0 items-center gap-1 rounded-full px-2.5 text-[10.5px] font-medium text-[#DCE0DD] cursor-pointer"
-                  >
-                    {paused ? <Play className="h-3 w-3 text-[#A6FA4C]" /> : <Pause className="h-3 w-3" />}
-                    {paused ? 'Resume' : 'Pause'}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onReconnect();
-                      onShowToast('Desk Node 01 reconnected');
-                    }}
-                    className="surface-tactile press-tactile inline-flex h-[30px] shrink-0 items-center gap-1 rounded-full px-2.5 text-[10.5px] font-medium text-[#A6FA4C] cursor-pointer"
-                  >
-                    Reconnect
-                  </button>
-                )}
-              </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={2}
+                      max={25}
+                      value={blinkRate}
+                      disabled={!connected}
+                      onChange={(e) => {
+                        if (paused) onTogglePaused(false);
+                        onChangeBlinkRate(Number(e.target.value));
+                      }}
+                      aria-label="Simulate live blink rate"
+                      className="w-full accent-[#A6FA4C] cursor-pointer"
+                    />
+                    {connected ? (
+                      <button
+                        type="button"
+                        onClick={() => onTogglePaused(!paused)}
+                        className="surface-tactile press-tactile inline-flex h-[30px] shrink-0 items-center gap-1 rounded-full px-2.5 text-[10.5px] font-medium text-[#DCE0DD] cursor-pointer"
+                      >
+                        {paused ? <Play className="h-3 w-3 text-[#A6FA4C]" /> : <Pause className="h-3 w-3" />}
+                        {paused ? 'Resume' : 'Pause'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onReconnect();
+                          onShowToast('Desk Node 01 reconnected');
+                        }}
+                        className="surface-tactile press-tactile inline-flex h-[30px] shrink-0 items-center gap-1 rounded-full px-2.5 text-[10.5px] font-medium text-[#A6FA4C] cursor-pointer"
+                      >
+                        Reconnect
+                      </button>
+                    )}
+                  </div>
 
-              <div className="mt-2 flex items-center justify-between font-mono-num text-[9.5px] text-[#6B736E]">
-                <span>1–9 Coral</span>
-                <span>10–14 Amber</span>
-                <span>15–20 Lime</span>
-                <span>21+ Mint</span>
-              </div>
+                  <div className="mt-2 flex items-center justify-between font-mono-num text-[9.5px] text-[#6B736E]">
+                    <span>1–9 Coral</span>
+                    <span>10–14 Amber</span>
+                    <span>15–20 Lime</span>
+                    <span>21+ Mint</span>
+                  </div>
+                </>
+              )}
             </div>
           </motion.div>
         )}
@@ -278,11 +355,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
       <section className="mt-4 flex flex-col items-center text-center">
         <BlinkAperture
           blinkRate={blinkRate}
-          paused={paused}
-          connected={connected}
+          paused={paused || !isFaceDetected}
+          connected={connected && mode !== 'OFFLINE'}
           baseline={BASELINE_RATE}
           zone={zone}
           expanded={cadenceInfoOpen}
+          isValidZero={isValidZero}
           onTap={() => {
             if (!connected) {
               onReconnect();
@@ -390,11 +468,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
               Session rhythm
             </span>
             <p className="font-mono-num mt-0.5 text-[10.5px] text-[#737B76]">
-              {!connected
-                ? 'Last sync 14m ago'
-                : paused
-                  ? 'Paused · 48m observed'
-                  : '48m observed · Last break 32m ago'}
+              {!connected || mode === 'OFFLINE'
+                ? isStale
+                  ? 'Telemetry stale (>3.5s)'
+                  : lastSyncTimestamp
+                    ? `Last sync ${Math.max(1, Math.round((Date.now() - lastSyncTimestamp) / 1000))}s ago · Offline`
+                    : 'Desk Node 01 offline'
+                : paused || !isFaceDetected
+                  ? `Paused · ${formatClock(effectiveSessionSeconds)} observed`
+                  : `${formatClock(effectiveSessionSeconds)} observed · In cadence`}
             </p>
           </div>
 
@@ -441,7 +523,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="mt-3.5 grid grid-cols-3 gap-2 border-t border-white/[0.06] pt-3.5 text-center">
                 <div className="rounded-[14px] bg-white/[0.025] py-2.5 px-2">
                   <div className="font-mono-num text-[15px] font-semibold text-[#F2F4F1]">
-                    {avgRate > 0 ? avgRate.toFixed(1) : '—'}
+                    {effectiveAvgRate > 0 ? effectiveAvgRate.toFixed(1) : '—'}
                   </div>
                   <div className="mt-0.5 text-[10px] text-[#7F8782]">Avg /min</div>
                 </div>
@@ -481,14 +563,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
               Monitoring Time
             </div>
             <div className="font-mono-num mt-2 text-[22px] font-semibold leading-none tracking-[-0.02em] text-[#F3F5F2]">
-              {isInactive ? '00:00' : formatClock(sessionSeconds)}
+              {isInactive && !isValidZero ? '00:00' : formatClock(effectiveSessionSeconds)}
             </div>
             <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#7F8782]">
               <span
                 className="h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: isInactive ? '#6D7670' : zone.accentHex }}
+                style={{ backgroundColor: isInactive && !isValidZero ? '#6D7670' : zone.accentHex }}
               />
-              <span>{isInactive ? 'Idle' : 'Active'}</span>
+              <span>{isInactive && !isValidZero ? (isMonitoring ? 'Paused' : 'Idle') : 'Active'}</span>
             </div>
           </div>
 
@@ -498,7 +580,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               Total Blinks
             </div>
             <div className="font-mono-num mt-2 text-[22px] font-semibold leading-none tracking-[-0.02em] text-[#F3F5F2]">
-              {isInactive ? '0' : totalBlinks.toLocaleString()}
+              {isInactive && !isValidZero ? '0' : effectiveTotalBlinks.toLocaleString()}
             </div>
             <div className="mt-2 text-[11px] text-[#7F8782]">
               Current session
@@ -512,9 +594,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
             <div
               className="font-mono-num mt-2 text-[22px] font-semibold leading-none tracking-[-0.02em] transition-colors duration-300"
-              style={{ color: isInactive ? '#8C938E' : zone.accentHex }}
+              style={{ color: isInactive && !isValidZero ? '#8C938E' : zone.accentHex }}
             >
-              {isInactive ? '0' : blinkRate}
+              {isInactive && !isValidZero ? '0' : blinkRate}
             </div>
             <div className="mt-2 text-[11px] text-[#7F8782]">Rolling 60s</div>
           </div>
@@ -526,7 +608,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
             <div className="mt-2 flex items-baseline gap-1">
               <span className="font-mono-num text-[22px] font-semibold leading-none tracking-[-0.02em] text-[#F3F5F2]">
-                {isInactive ? '0' : avgRate.toFixed(1)}
+                {effectiveAvgRate > 0 ? effectiveAvgRate.toFixed(1) : (isInactive && !isValidZero ? '0' : '0.0')}
               </span>
               <span className="text-[11px] text-[#7F8782]">/min</span>
             </div>

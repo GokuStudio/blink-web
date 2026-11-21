@@ -99,7 +99,8 @@ export function deriveBlinkZone(
   blinkRate: number,
   paused: boolean,
   connected: boolean,
-  baseline = 17
+  baseline = 17,
+  options?: { isFaceDetected?: boolean; isValidZero?: boolean }
 ): DerivedBlinkZone {
   if (!connected) {
     return {
@@ -116,14 +117,35 @@ export function deriveBlinkZone(
     };
   }
 
-  if (paused || blinkRate <= 0) {
+  const isFaceDetected = options?.isFaceDetected !== false;
+  const isValidZero = options?.isValidZero === true;
+
+  if (paused || !isFaceDetected) {
     return {
       id: 'paused',
-      shortLabel: 'Paused',
-      subLabel: 'Tracking paused',
-      headline: 'Blink is resting quietly.',
-      guidance: 'No blink activity is being recorded while paused.',
-      ctaLabel: 'Resume Observation',
+      shortLabel: !isFaceDetected ? 'Face Away' : 'Paused',
+      subLabel: !isFaceDetected ? 'Face not detected' : 'Tracking paused',
+      headline: !isFaceDetected ? 'Looking away from screen.' : 'Blink is resting quietly.',
+      guidance: !isFaceDetected
+        ? 'Observation is suspended while your face is out of camera view.'
+        : 'No blink activity is being recorded while paused.',
+      ctaLabel: !isFaceDetected ? 'Face Camera' : 'Resume Observation',
+      ctaSecondary: 'Settings',
+      accentHex: '#8C938E',
+      ambientRgb: '140, 147, 142',
+      segmentTint: 'rgba(255, 255, 255, 0.14)',
+    };
+  }
+
+  // If rate is <= 0 and not a confirmed stare (isValidZero), it represents the initial baseline acquisition window
+  if (blinkRate <= 0 && !isValidZero) {
+    return {
+      id: 'paused',
+      shortLabel: 'Calibrating',
+      subLabel: 'Establishing cadence',
+      headline: 'Calibrating eye rhythm…',
+      guidance: 'Observation active. Acquiring rolling 60-second baseline cadence.',
+      ctaLabel: 'Observing',
       ctaSecondary: 'Settings',
       accentHex: '#8C938E',
       ambientRgb: '140, 147, 142',

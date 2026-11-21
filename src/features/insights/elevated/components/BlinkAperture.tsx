@@ -11,6 +11,7 @@ interface BlinkApertureProps {
   zone: DerivedBlinkZone;
   expanded?: boolean;
   onTap?: () => void;
+  isValidZero?: boolean;
 }
 
 const SCALE_MAX = 25; // 3 clean subtle arc segments across 0–25 blinks/min
@@ -89,9 +90,10 @@ export const BlinkAperture: React.FC<BlinkApertureProps> = ({
   zone,
   expanded = false,
   onTap,
+  isValidZero = false,
 }) => {
   const prefersReducedMotion = Boolean(useReducedMotion());
-  const isInactive = !connected || paused || blinkRate <= 0;
+  const isInactive = !connected || paused || (blinkRate <= 0 && !isValidZero);
   const animatedRate = useAnimatedNumber(blinkRate, !isInactive, prefersReducedMotion);
 
   const cx = 136;

@@ -141,7 +141,7 @@ export class MockRealtimeService implements IRealtimeService {
     this.currentTelemetry = {
       ...telemetry,
       isSimulated: telemetry.isSimulated !== undefined ? telemetry.isSimulated : true,
-      timestamp: Date.now(),
+      timestamp: telemetry.timestamp !== undefined ? telemetry.timestamp : Date.now(),
     };
     this.telemetryListeners.forEach((listener) => listener(this.currentTelemetry));
   }

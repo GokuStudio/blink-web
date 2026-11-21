@@ -42,7 +42,7 @@ export const JoinPage: React.FC = () => {
             <Button
               variant="cyan"
               className="w-full flex items-center justify-center gap-2"
-              onClick={() => navigate('/device')}
+              onClick={() => navigate(`/device?room=${encodeURIComponent(code || 'BLINK-DEMO')}`)}
             >
               <Monitor className="w-4 h-4" />
               <span>Connect as Blink Device (Eyes Display)</span>
@@ -51,7 +51,7 @@ export const JoinPage: React.FC = () => {
             <Button
               variant="primary"
               className="w-full flex items-center justify-center gap-2"
-              onClick={() => navigate('/insights')}
+              onClick={() => navigate(`/insights?room=${encodeURIComponent(code || 'BLINK-DEMO')}`)}
             >
               <Smartphone className="w-4 h-4" />
               <span>Connect as Companion Insights (Dashboard)</span>

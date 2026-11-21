@@ -18,6 +18,8 @@ import { HomeView } from './screens/HomeView';
 import { InsightsView } from './screens/InsightsView';
 import { AssistantView } from './screens/AssistantView';
 import { SettingsView } from './screens/SettingsView';
+import { useElevatedLiveTelemetry } from './hooks/useElevatedLiveTelemetry';
+import type { IRealtimeService } from '@/shared/realtime/interfaces/realtime-service.interface';
 import './elevated.css';
 
 function parseDestination(param: string | null): DestinationId {
@@ -32,14 +34,26 @@ function parseDestination(param: string | null): DestinationId {
   return 'home';
 }
 
-export const InsightsApp: React.FC = () => {
+export interface InsightsAppProps {
+  realtimeService?: IRealtimeService;
+  roomCode?: string;
+}
+
+export const InsightsApp: React.FC<InsightsAppProps> = ({
+  realtimeService,
+  roomCode,
+}) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [destination, setDestination] = useState<DestinationId>(() =>
     parseDestination(searchParams.get('screen'))
   );
-  const [blinkRate, setBlinkRate] = useState<number>(13);
+
+  const live = useElevatedLiveTelemetry({
+    service: realtimeService,
+    roomCode,
+  });
+
   const [observationPaused, setObservationPaused] = useState<boolean>(false);
-  const [deviceConnected, setDeviceConnected] = useState<boolean>(true);
   const [range, setRange] = useState<TimeRangeId>('today');
   const [comfort, setComfort] = useState<ComfortChoice | null>(null);
   const [assistantPhase, setAssistantPhase] = useState<AssistantPhase>('idle');
@@ -113,8 +127,8 @@ export const InsightsApp: React.FC = () => {
     setBreaksTaken((b) => Math.min(3, b + 1));
     setExtraBreaks((e) => e + 1);
     setObservationPaused(false);
-    setBlinkRate((r) => (r < 16 ? 18 : r));
-  }, []);
+    live.setSimulatedBlinkRate(18);
+  }, [live]);
 
   return (
     <MotionConfig reducedMotion="user">
@@ -207,15 +221,12 @@ export const InsightsApp: React.FC = () => {
                   >
                     {destination === 'home' && (
                       <HomeView
-                        blinkRate={blinkRate}
-                        onChangeBlinkRate={setBlinkRate}
-                        paused={observationPaused}
+                        blinkRate={live.blinkRate}
+                        onChangeBlinkRate={live.setSimulatedBlinkRate}
+                        paused={observationPaused || !live.isFaceDetected || live.monitoringMode === 'paused'}
                         onTogglePaused={setObservationPaused}
-                        connected={deviceConnected}
-                        onReconnect={() => {
-                          setDeviceConnected(true);
-                          setObservationPaused(false);
-                        }}
+                        connected={live.deviceConnected && live.mode !== 'OFFLINE'}
+                        onReconnect={live.reconnect}
                         onStartRitual={(kind) => setRitual({ open: true, kind })}
                         swipeTrackRef={swipeTrackRef}
                         onOpenInsights={() => navigate('insights')}
@@ -224,6 +235,16 @@ export const InsightsApp: React.FC = () => {
                         hasUnread={hasUnread}
                         breaksTaken={breaksTaken}
                         onShowToast={showToast}
+                        mode={live.mode}
+                        totalBlinks={live.totalBlinks}
+                        avgRate={live.avgRate}
+                        sessionSeconds={live.sessionSeconds}
+                        isFaceDetected={live.isFaceDetected}
+                        isValidZero={live.isValidZero}
+                        isStale={live.isStale}
+                        isMonitoring={live.isMonitoring}
+                        roomCode={live.roomCode}
+                        lastSyncTimestamp={live.lastSyncTimestamp}
                       />
                     )}
 
@@ -238,6 +259,10 @@ export const InsightsApp: React.FC = () => {
                         }}
                         onStartRitual={(kind) => setRitual({ open: true, kind })}
                         extraBreaks={extraBreaks}
+                        mode={live.mode}
+                        liveAvgRate={live.avgRate}
+                        liveSessionSeconds={live.sessionSeconds}
+                        liveTotalBlinks={live.totalBlinks}
                       />
                     )}
 
@@ -252,14 +277,23 @@ export const InsightsApp: React.FC = () => {
 
                     {destination === 'settings' && (
                       <SettingsView
-                        deviceConnected={deviceConnected}
+                        deviceConnected={live.deviceConnected && live.mode !== 'OFFLINE'}
                         onToggleDeviceConnected={(connected) => {
-                          setDeviceConnected(connected);
-                          if (connected) setObservationPaused(false);
+                          if (connected) {
+                            live.reconnect();
+                            setObservationPaused(false);
+                          } else {
+                            setObservationPaused(true);
+                          }
                         }}
                         soundEnabled={soundEnabled}
                         onToggleSound={handleSetSoundEnabled}
                         onShowToast={showToast}
+                        roomCode={live.roomCode}
+                        mode={live.mode}
+                        monitoringMode={live.monitoringMode}
+                        isStale={live.isStale}
+                        onSwitchRoom={live.switchRoom}
                       />
                     )}
                   </motion.div>
@@ -356,7 +390,7 @@ export const InsightsApp: React.FC = () => {
                   <span className="font-mono-num text-[10px] text-[#737B76]">Now</span>
                 </div>
                 <p className="mt-1 text-[11.5px] text-[#8E9690]">
-                  Simulated cadence dipped to {blinkRate}/min during a 48m focus block.
+                  Simulated cadence dipped to {live.blinkRate || 13}/min during a 48m focus block.
                 </p>
               </div>
               <div className="rounded-[16px] surface-well p-3">
