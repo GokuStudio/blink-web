@@ -628,15 +628,16 @@ describe('Blink Stage 2D — Hey Blink Integrated Voice Assistant', () => {
     expect(envContent).not.toContain('GEMINI_API_KEY');
   });
 
-  it('11. opens Voice Settings popover on /demo to adjust provider, mic, ring style, and sliders', async () => {
+  it('11. opens Voice Settings popover on /demo to switch Voice Ring vs Voice Glow, adjust grouped sliders, and hide status text', async () => {
     const fakeSession = new FakeVoiceSession({ isSimulated: true });
     renderDemoWithVoice(sharedRealtime, () => fakeSession);
 
     fireEvent.click(screen.getByTestId('voice-settings-trigger'));
     expect(await screen.findByTestId('voice-settings-popover')).toBeInTheDocument();
 
-    // Switch ring style to mono and adjust sensitivity slider
+    // Switch ring style to mono, expand Ring Motion group, and adjust sensitivity slider
     fireEvent.click(screen.getByTestId('voice-ring-type-mono'));
+    fireEvent.click(screen.getByTestId('voice-group-ring-motion'));
     fireEvent.change(screen.getByTestId('voice-slider-sensitivity'), { target: { value: '1.3' } });
     expect((screen.getByTestId('voice-slider-sensitivity') as HTMLInputElement).value).toBe('1.3');
 
@@ -648,9 +649,19 @@ describe('Blink Stage 2D — Hey Blink Integrated Voice Assistant', () => {
     fireEvent.click(screen.getByTestId('voice-toggle-status-label'));
     expect(screen.queryByTestId('voice-bubble-status-label')).not.toBeInTheDocument();
 
-    // Reset defaults restores 1.0 and status text visible
+    // Switch visualizer to Voice Glow (libraries.dev/voice) and adjust curved-bezel Edge Fade
+    fireEvent.click(screen.getByTestId('voice-visualizer-glow'));
+    expect(screen.getByTestId('blink-voice-bubble-stage')).toHaveAttribute(
+      'data-voice-visualizer',
+      'voice-glow'
+    );
+    expect(screen.getByTestId('blink-voice-glow-viewport')).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('voice-glow-slider-edge-fade'), { target: { value: '0.9' } });
+    expect((screen.getByTestId('voice-glow-slider-edge-fade') as HTMLInputElement).value).toBe('0.9');
+
+    // Reset defaults restores edgeFade & status text visible
     fireEvent.click(screen.getByTestId('voice-tuning-reset'));
-    expect((screen.getByTestId('voice-slider-sensitivity') as HTMLInputElement).value).toBe('1');
+    expect((screen.getByTestId('voice-glow-slider-edge-fade') as HTMLInputElement).value).toBe('0.78');
     expect(screen.getByTestId('voice-bubble-status-label')).toBeInTheDocument();
 
     // Escape closes popover cleanly
