@@ -246,14 +246,11 @@ export type {
 export {
   useBlinkVoiceExperience,
   DEFAULT_VOICE_RING_TUNING,
-  DEFAULT_VOICE_GLOW_INTEGRATED_TUNING,
 } from './integration/useBlinkVoiceExperience';
 export type {
   UseBlinkVoiceExperienceOptions,
   BlinkVoiceExperience,
   VoiceRingTuning,
-  VoiceVisualizerKind,
-  VoiceGlowIntegratedTuning,
 } from './integration/useBlinkVoiceExperience';
 
 export { BlinkVoiceBubble } from './components/BlinkVoiceBubble';

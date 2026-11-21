@@ -30,10 +30,6 @@ import {
   listAudioInputDevices,
   type AudioInputDeviceInfo,
 } from '../audio/microphone-capture';
-import {
-  DEFAULT_VOICE_GLOW_TUNING,
-  type VoiceGlowTuning,
-} from '../visualizer/visual-presets';
 import type {
   IVoiceSession,
   VoiceAudioLevels,
@@ -92,41 +88,23 @@ export interface UseBlinkVoiceExperienceOptions {
   reportDiagnostics?: boolean;
 }
 
-export type VoiceVisualizerKind = 'voice-ring' | 'voice-glow';
-
-export interface VoiceGlowIntegratedTuning extends VoiceGlowTuning {
-  /** Edge feathering inside Blink's curved display aperture (0.2..1.0, default 0.78) */
-  edgeFade: number;
-}
-
-export const DEFAULT_VOICE_GLOW_INTEGRATED_TUNING: VoiceGlowIntegratedTuning = {
-  ...DEFAULT_VOICE_GLOW_TUNING,
-  edgeFade: 0.78,
-};
-
 export interface VoiceRingTuning {
-  /** Active voice visualizer: libraries.dev/voice-ring vs libraries.dev/voice (voice-glow) */
-  visualizerKind: VoiceVisualizerKind;
   ringType: 'ring' | 'mono';
   sensitivityScale: number;
   glowScale: number;
   speedScale: number;
   warmthOffset: number;
-  /** When false, hides the on-screen Listening / Thinking / Speaking pill so the visualizer speaks for itself */
+  /** When false, hides the on-screen Listening / Thinking / Speaking pill so the ring speaks for itself */
   showStatusLabel: boolean;
-  /** Dedicated configuration for libraries.dev/voice (VoiceGlow / VoiceBeam) */
-  glow: VoiceGlowIntegratedTuning;
 }
 
 export const DEFAULT_VOICE_RING_TUNING: VoiceRingTuning = {
-  visualizerKind: 'voice-ring',
   ringType: 'ring',
   sensitivityScale: 1.0,
   glowScale: 1.0,
   speedScale: 1.0,
   warmthOffset: 0,
   showStatusLabel: true,
-  glow: { ...DEFAULT_VOICE_GLOW_INTEGRATED_TUNING },
 };
 
 export interface BlinkVoiceExperience {
@@ -167,7 +145,6 @@ export interface BlinkVoiceExperience {
   switchProvider: (kind: VoiceProviderKind) => void;
   tuning: VoiceRingTuning;
   updateTuning: (partial: Partial<VoiceRingTuning>) => void;
-  updateGlowTuning: (partial: Partial<VoiceGlowIntegratedTuning>) => void;
   resetTuning: () => void;
 
   // Actions
@@ -230,19 +207,8 @@ export function useBlinkVoiceExperience(
     setTuning((prev) => ({ ...prev, ...partial }));
   }, []);
 
-  const updateGlowTuning = useCallback((partial: Partial<VoiceGlowIntegratedTuning>) => {
-    setTuning((prev) => ({
-      ...prev,
-      glow: { ...prev.glow, ...partial },
-    }));
-  }, []);
-
   const resetTuning = useCallback(() => {
-    setTuning((prev) => ({
-      ...DEFAULT_VOICE_RING_TUNING,
-      visualizerKind: prev.visualizerKind,
-      glow: { ...DEFAULT_VOICE_GLOW_INTEGRATED_TUNING },
-    }));
+    setTuning({ ...DEFAULT_VOICE_RING_TUNING });
   }, []);
 
   const sessionRef = useRef<IVoiceSession | null>(null);
@@ -729,7 +695,6 @@ export function useBlinkVoiceExperience(
     switchProvider,
     tuning,
     updateTuning,
-    updateGlowTuning,
     resetTuning,
     startVoice,
     startPreviewVoice,

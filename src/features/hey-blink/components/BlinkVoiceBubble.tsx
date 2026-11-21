@@ -16,11 +16,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from 'framer-motion';
 import { VoiceRing, type VoiceOrbState, type TypeOpts } from 'voice-ring';
-import { BlinkVoiceGlow } from '../visualizer/BlinkVoiceGlow';
-import type {
-  VoiceAudioLevels,
-  VoiceSessionState,
-} from '../services/voice-session.interface';
+import type { VoiceAudioLevels } from '../services/voice-session.interface';
 import type { VoiceRingTuning } from '../integration/useBlinkVoiceExperience';
 import {
   getVoiceStatusCaption,
@@ -44,32 +40,6 @@ export interface BlinkVoiceBubbleProps {
   tuning?: VoiceRingTuning;
   /** Optional click handler (e.g. tap bubble to interrupt while speaking) */
   onBubbleClick?: () => void;
-}
-
-function mapExperienceToGlowState(state: VoiceExperienceState): VoiceSessionState {
-  switch (state) {
-    case 'VOICE_REQUESTED':
-    case 'MIC_PERMISSION_PENDING':
-      return 'entering';
-    case 'VOICE_LISTENING':
-    case 'USER_SPEAKING':
-      return 'listening';
-    case 'VOICE_CONNECTING':
-    case 'VOICE_PROCESSING':
-      return 'thinking';
-    case 'ASSISTANT_SPEAKING':
-      return 'speaking';
-    case 'VOICE_INTERRUPTED':
-      return 'interrupted';
-    case 'VOICE_ERROR':
-      return 'error';
-    case 'VOICE_ENDING':
-    case 'RETURNING_TO_EYES':
-      return 'ending';
-    case 'EYE_IDLE':
-    default:
-      return 'idle';
-  }
 }
 
 function mapExperienceToRingState(state: VoiceExperienceState): VoiceOrbState {
@@ -322,32 +292,12 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
     [experienceState, prefersReducedMotion]
   );
 
-  const visualizerKind = userTuning?.visualizerKind ?? 'voice-ring';
   const ringType = userTuning?.ringType ?? 'ring';
   const sensitivityScale = userTuning?.sensitivityScale ?? 1;
   const glowScale = userTuning?.glowScale ?? 1;
   const speedScale = userTuning?.speedScale ?? 1;
   const warmthOffset = userTuning?.warmthOffset ?? 0;
   const showStatusLabel = userTuning?.showStatusLabel ?? true;
-  const glowTuning = userTuning?.glow;
-  const edgeFade = glowTuning?.edgeFade ?? 0.78;
-  const glowState = mapExperienceToGlowState(experienceState);
-
-  // Feathered elliptical edge mask for Blink's curved bezel glass so VoiceGlow
-  // dissolves smoothly into pure black on all four sides with zero straight-edge clipping.
-  const edgeMaskStyle = useMemo<React.CSSProperties>(() => {
-    const fadeClamped = Math.max(0.2, Math.min(1, edgeFade));
-    const innerStop = Math.round(58 - fadeClamped * 32); // ~26%..52%
-    const midStop = Math.round(84 - fadeClamped * 18);   // ~66%..80%
-    const mask =
-      variant === 'desktop-integrated'
-        ? `radial-gradient(ellipse 68% 64% at 50% 56%, rgba(0,0,0,1) ${innerStop}%, rgba(0,0,0,0.68) ${midStop}%, rgba(0,0,0,0) 99%)`
-        : `radial-gradient(ellipse 84% 82% at 50% 60%, rgba(0,0,0,1) ${Math.min(72, innerStop + 18)}%, rgba(0,0,0,0.75) ${Math.min(92, midStop + 10)}%, rgba(0,0,0,0) 100%)`;
-    return {
-      WebkitMaskImage: mask,
-      maskImage: mask,
-    };
-  }, [edgeFade, variant]);
 
   const tuning = useMemo(
     () => ({
@@ -390,130 +340,87 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
       ref={containerRef}
       data-testid="blink-voice-bubble-stage"
       data-voice-state={experienceState}
-      data-voice-visualizer={visualizerKind}
       data-voice-simulated={isSimulated ? 'true' : 'false'}
       className={`absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none transition-all duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${containerTransformClass}`}
     >
-      {visualizerKind === 'voice-glow' ? (
-        /* libraries.dev/voice (VoiceGlow / VoiceBeam) fitted cleanly into Blink's curved aperture with feathered edge fade */
-        <div
-          data-testid="blink-voice-glow-viewport"
-          onClick={isInteractiveInterrupt && onBubbleClick ? onBubbleClick : undefined}
-          className={`absolute overflow-hidden ${
-            variant === 'desktop-integrated'
-              ? 'top-[25%] bottom-[17%] left-[13%] right-[13%] rounded-[24%]'
-              : 'inset-0'
-          } ${isInteractiveInterrupt && onBubbleClick ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'}`}
-          style={edgeMaskStyle}
-        >
-          {canvasSupported ? (
-            <BlinkVoiceGlow
-              state={glowState}
-              isMuted={isMuted}
-              audioLevelsRef={audioLevelsRef}
-              tuning={glowTuning}
-              className="w-full h-full bg-black"
-            />
-          ) : (
-            <div
-              data-testid="blink-voice-glow-fallback"
-              className="w-full h-full bg-gradient-to-t from-[#35DFFF]/35 via-[#4F46E5]/15 to-transparent"
-            />
-          )}
-          {/* Inner curved vignette reinforcing seamless edge-fade into Blink's pitch-black glass */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-20"
-            style={{
-              background:
-                variant === 'desktop-integrated'
-                  ? `radial-gradient(ellipse 66% 62% at 50% 56%, rgba(0,0,0,0) ${Math.round(48 - edgeFade * 16)}%, rgba(0,0,0,${(0.45 + edgeFade * 0.45).toFixed(2)}) 84%, #000000 100%)`
-                  : `radial-gradient(ellipse 86% 84% at 50% 60%, rgba(0,0,0,0) 60%, rgba(0,0,0,${(edgeFade * 0.65).toFixed(2)}) 100%)`,
-            }}
-          />
-        </div>
-      ) : (
-        <>
-          {/* Soft restrained spatial glow behind the Voice Ring */}
-          <div
-            aria-hidden="true"
-            className={`absolute rounded-full transition-all duration-500 ease-out ${
-              variant === 'desktop-integrated'
-                ? experienceState === 'VOICE_ERROR'
-                  ? '-translate-y-[8%]'
-                  : 'translate-y-[4%]'
-                : ''
-            }`}
-            style={{
-              width: ringSize * 1.5,
-              height: ringSize * 1.5,
-              background: tuning.glowBackdrop,
-              opacity: isExiting ? 0 : 1,
-            }}
-          />
+      {/* Soft restrained spatial glow behind the Voice Ring */}
+      <div
+        aria-hidden="true"
+        className={`absolute rounded-full transition-all duration-500 ease-out ${
+          variant === 'desktop-integrated'
+            ? experienceState === 'VOICE_ERROR'
+              ? '-translate-y-[8%]'
+              : 'translate-y-[4%]'
+            : ''
+        }`}
+        style={{
+          width: ringSize * 1.5,
+          height: ringSize * 1.5,
+          background: tuning.glowBackdrop,
+          opacity: isExiting ? 0 : 1,
+        }}
+      />
 
-          {/* Centered Voice Ring Object */}
+      {/* Centered Voice Ring Object */}
+      <div
+        role={isInteractiveInterrupt && onBubbleClick ? 'button' : 'img'}
+        tabIndex={isInteractiveInterrupt && onBubbleClick ? 0 : -1}
+        aria-label={
+          isInteractiveInterrupt && onBubbleClick
+            ? `${statusCaption || 'Blink voice active'}. Press to interrupt.`
+            : statusCaption || 'Blink voice presence'
+        }
+        onClick={isInteractiveInterrupt && onBubbleClick ? onBubbleClick : undefined}
+        onKeyDown={
+          isInteractiveInterrupt && onBubbleClick
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onBubbleClick();
+                }
+              }
+            : undefined
+        }
+        data-testid="blink-voice-ring-wrapper"
+        className={`relative flex items-center justify-center rounded-full transition-transform duration-300 ${
+          variant === 'desktop-integrated'
+            ? experienceState === 'VOICE_ERROR'
+              ? '-translate-y-[8%] scale-[0.82]'
+              : 'translate-y-[4%]'
+            : ''
+        } ${
+          isInteractiveInterrupt && onBubbleClick
+            ? 'pointer-events-auto cursor-pointer focus-visible:outline-2 focus-visible:outline-[#35DFFF]'
+            : 'pointer-events-none'
+        }`}
+        style={{ width: ringSize, height: ringSize }}
+      >
+        {canvasSupported ? (
+          <VoiceRing
+            type={ringType}
+            state={ringState}
+            size={ringSize}
+            level={getAudioLevel}
+            theme="dark"
+            emotion="calm"
+            speed={tuning.speed}
+            idle={tuning.idle}
+            calm={tuning.calm}
+            sensitivity={tuning.sensitivity}
+            paused={experienceState === 'EYE_IDLE'}
+            opts={tuning.opts}
+            aria-label={`Blink voice visualizer (${ringState})`}
+            data-testid="blink-voice-ring-canvas"
+          />
+        ) : (
+          /* Deterministic fallback ring for headless/JSDOM test environments without 2D canvas */
           <div
-            role={isInteractiveInterrupt && onBubbleClick ? 'button' : 'img'}
-            tabIndex={isInteractiveInterrupt && onBubbleClick ? 0 : -1}
-            aria-label={
-              isInteractiveInterrupt && onBubbleClick
-                ? `${statusCaption || 'Blink voice active'}. Press to interrupt.`
-                : statusCaption || 'Blink voice presence'
-            }
-            onClick={isInteractiveInterrupt && onBubbleClick ? onBubbleClick : undefined}
-            onKeyDown={
-              isInteractiveInterrupt && onBubbleClick
-                ? (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onBubbleClick();
-                    }
-                  }
-                : undefined
-            }
-            data-testid="blink-voice-ring-wrapper"
-            className={`relative flex items-center justify-center rounded-full transition-transform duration-300 ${
-              variant === 'desktop-integrated'
-                ? experienceState === 'VOICE_ERROR'
-                  ? '-translate-y-[8%] scale-[0.82]'
-                  : 'translate-y-[4%]'
-                : ''
-            } ${
-              isInteractiveInterrupt && onBubbleClick
-                ? 'pointer-events-auto cursor-pointer focus-visible:outline-2 focus-visible:outline-[#35DFFF]'
-                : 'pointer-events-none'
-            }`}
-            style={{ width: ringSize, height: ringSize }}
-          >
-            {canvasSupported ? (
-              <VoiceRing
-                type={ringType}
-                state={ringState}
-                size={ringSize}
-                level={getAudioLevel}
-                theme="dark"
-                emotion="calm"
-                speed={tuning.speed}
-                idle={tuning.idle}
-                calm={tuning.calm}
-                sensitivity={tuning.sensitivity}
-                paused={experienceState === 'EYE_IDLE'}
-                opts={tuning.opts}
-                aria-label={`Blink voice visualizer (${ringState})`}
-                data-testid="blink-voice-ring-canvas"
-              />
-            ) : (
-              /* Deterministic fallback ring for headless/JSDOM test environments without 2D canvas */
-              <div
-                data-testid="blink-voice-ring-fallback"
-                className="rounded-full border border-[#35DFFF]/50 bg-gradient-to-br from-[#35DFFF]/20 via-[#6B7CFF]/15 to-white/10 shadow-[0_0_28px_rgba(53,223,255,0.22)]"
-                style={{ width: ringSize * 0.72, height: ringSize * 0.72 }}
-              />
-            )}
-          </div>
-        </>
-      )}
+            data-testid="blink-voice-ring-fallback"
+            className="rounded-full border border-[#35DFFF]/50 bg-gradient-to-br from-[#35DFFF]/20 via-[#6B7CFF]/15 to-white/10 shadow-[0_0_28px_rgba(53,223,255,0.22)]"
+            style={{ width: ringSize * 0.72, height: ringSize * 0.72 }}
+          />
+        )}
+      </div>
 
       {/* Compact, nonintrusive state label (hidden visually when user prefers pure ring mode, kept for errors & screen readers) */}
       <div
