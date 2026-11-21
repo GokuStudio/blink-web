@@ -185,13 +185,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
     onStartRitual('horizon-20');
   };
 
+  const showSecondaryAction =
+    !connected ||
+    (!paused && isFaceDetected && !isCameraStandby && (zone.id === 'low' || zone.id === 'below'));
+
   const handleSecondaryAction = () => {
-    if (!connected || paused) {
+    if (!connected) {
       onOpenSettings();
-      return;
-    }
-    if (zone.id === 'healthy' || zone.id === 'brisk') {
-      onOpenInsights();
       return;
     }
     onShowToast('Break cue snoozed for 10 min');
@@ -470,9 +470,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   : 'Swipe to rest · 20s'
             }
             mode={!connected ? 'reconnect' : paused ? 'resume' : 'rest'}
-            secondaryLabel={zone.ctaSecondary}
+            secondaryLabel={showSecondaryAction ? zone.ctaSecondary : undefined}
             onComplete={handlePrimaryAction}
-            onSecondaryAction={handleSecondaryAction}
+            onSecondaryAction={showSecondaryAction ? handleSecondaryAction : undefined}
           />
         </div>
       </section>

@@ -355,11 +355,11 @@ export const SwipeToRest: React.FC<SwipeToRestProps> = ({
       </div>
 
       {secondaryLabel && onSecondaryAction && (
-        <div className="flex justify-center">
+        <div className="flex justify-center pt-0.5">
           <button
             type="button"
             onClick={onSecondaryAction}
-            className="press-tactile rounded-full px-3 py-1 text-[12px] font-medium text-[#7F8782] hover:text-[#DCE0DD] cursor-pointer"
+            className="press-tactile rounded-full border border-white/[0.07] bg-white/[0.03] px-3.5 py-1 text-[11.5px] font-medium text-[#8E9690] hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-[#DCE0DD] transition-colors cursor-pointer"
           >
             {secondaryLabel}
           </button>
