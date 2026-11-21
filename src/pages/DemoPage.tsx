@@ -19,6 +19,7 @@ import type { IRealtimeService } from '@/shared/realtime/interfaces/realtime-ser
 import { InsightsApp } from '@/features/insights/elevated/InsightsApp';
 import { useBlinkVoiceExperience } from '@/features/hey-blink/integration/useBlinkVoiceExperience';
 import { BlinkVoiceControlsPill } from '@/features/hey-blink/components/BlinkVoiceControlsPill';
+import { BlinkVoiceSettingsPopover } from '@/features/hey-blink/components/BlinkVoiceSettingsPopover';
 import type { IVoiceSession } from '@/features/hey-blink/services/voice-session.interface';
 import type { DiagnosticActionType } from '@/features/demo/diagnostics/diagnosticStore';
 import {
@@ -168,6 +169,7 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService, createVoice
   // Docked non-overlapping side rail (Explore Blink OR System Diagnostics)
   const isDesktopLayout = useMediaQuery('(min-width: 900px)');
   const [activeDrawer, setActiveDrawer] = useState<'guide' | 'issues' | null>(null);
+  const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
   const guideTriggerRef = useRef<HTMLButtonElement>(null);
   const issueTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -432,6 +434,14 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService, createVoice
 
                   {/* Cohesive Voice Control Pill ([ Talk to Blink ] / [ Mic On ] [ Interrupt ] [ End ]) */}
                   <BlinkVoiceControlsPill voice={voice} />
+
+                  {/* Compact Voice Provider, Mic & Ring Tuning Popover */}
+                  <BlinkVoiceSettingsPopover
+                    voice={voice}
+                    open={voiceSettingsOpen}
+                    onToggle={() => setVoiceSettingsOpen((v) => !v)}
+                    onClose={() => setVoiceSettingsOpen(false)}
+                  />
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 max-w-[380px] px-2">

@@ -7,6 +7,7 @@ import { Maximize2, Minimize2, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useBlinkVoiceExperience } from '@/features/hey-blink/integration/useBlinkVoiceExperience';
 import { BlinkVoiceControlsPill } from '@/features/hey-blink/components/BlinkVoiceControlsPill';
+import { BlinkVoiceSettingsPopover } from '@/features/hey-blink/components/BlinkVoiceSettingsPopover';
 import type { IVoiceSession } from '@/features/hey-blink/services/voice-session.interface';
 
 export interface DevicePageProps {
@@ -27,6 +28,7 @@ export const DevicePage: React.FC<DevicePageProps> = ({ createVoiceSession }) =>
   const expression = exprParam || storeExpr;
   const { isFullscreen, toggleFullscreen } = useFullscreen();
   const [showHud, setShowHud] = useState(true);
+  const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
 
   const voice = useBlinkVoiceExperience({
     createSession: createVoiceSession,
@@ -138,6 +140,12 @@ export const DevicePage: React.FC<DevicePageProps> = ({ createVoiceSession }) =>
       >
         <div className="inline-flex items-center gap-1.5 rounded-full bg-[#141618]/88 border border-white/[0.09] p-1.5 shadow-[0_14px_36px_rgba(0,0,0,0.72)] backdrop-blur-md">
           <BlinkVoiceControlsPill voice={voice} />
+          <BlinkVoiceSettingsPopover
+            voice={voice}
+            open={voiceSettingsOpen}
+            onToggle={() => setVoiceSettingsOpen((v) => !v)}
+            onClose={() => setVoiceSettingsOpen(false)}
+          />
         </div>
       </div>
     </div>

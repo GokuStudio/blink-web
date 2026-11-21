@@ -243,10 +243,14 @@ export type {
   BlinkVisualMode,
 } from './integration/voiceExperienceStateMachine';
 
-export { useBlinkVoiceExperience } from './integration/useBlinkVoiceExperience';
+export {
+  useBlinkVoiceExperience,
+  DEFAULT_VOICE_RING_TUNING,
+} from './integration/useBlinkVoiceExperience';
 export type {
   UseBlinkVoiceExperienceOptions,
   BlinkVoiceExperience,
+  VoiceRingTuning,
 } from './integration/useBlinkVoiceExperience';
 
 export { BlinkVoiceBubble } from './components/BlinkVoiceBubble';
@@ -254,3 +258,6 @@ export type { BlinkVoiceBubbleProps } from './components/BlinkVoiceBubble';
 
 export { BlinkVoiceControlsPill } from './components/BlinkVoiceControlsPill';
 export type { BlinkVoiceControlsPillProps } from './components/BlinkVoiceControlsPill';
+
+export { BlinkVoiceSettingsPopover } from './components/BlinkVoiceSettingsPopover';
+export type { BlinkVoiceSettingsPopoverProps } from './components/BlinkVoiceSettingsPopover';

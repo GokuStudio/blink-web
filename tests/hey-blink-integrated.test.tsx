@@ -627,4 +627,27 @@ describe('Blink Stage 2D — Hey Blink Integrated Voice Assistant', () => {
     const envContent = fs.readFileSync(path.resolve(process.cwd(), 'src/config/env.ts'), 'utf8');
     expect(envContent).not.toContain('GEMINI_API_KEY');
   });
+
+  it('11. opens Voice Settings popover on /demo to adjust provider, mic, ring style, and sliders', async () => {
+    const fakeSession = new FakeVoiceSession({ isSimulated: true });
+    renderDemoWithVoice(sharedRealtime, () => fakeSession);
+
+    fireEvent.click(screen.getByTestId('voice-settings-trigger'));
+    expect(await screen.findByTestId('voice-settings-popover')).toBeInTheDocument();
+
+    // Switch ring style to mono and adjust sensitivity slider
+    fireEvent.click(screen.getByTestId('voice-ring-type-mono'));
+    fireEvent.change(screen.getByTestId('voice-slider-sensitivity'), { target: { value: '1.3' } });
+    expect((screen.getByTestId('voice-slider-sensitivity') as HTMLInputElement).value).toBe('1.3');
+
+    // Reset defaults restores 1.0
+    fireEvent.click(screen.getByTestId('voice-tuning-reset'));
+    expect((screen.getByTestId('voice-slider-sensitivity') as HTMLInputElement).value).toBe('1');
+
+    // Escape closes popover cleanly
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByTestId('voice-settings-popover')).not.toBeInTheDocument();
+    });
+  });
 });

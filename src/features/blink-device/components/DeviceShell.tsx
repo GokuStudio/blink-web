@@ -112,6 +112,7 @@ export const DeviceShell: React.FC<DeviceShellProps> = ({
               isSimulated={voiceExperience.isSimulated}
               variant="standalone-device"
               errorMessage={voiceExperience.error?.message ?? null}
+              tuning={voiceExperience.tuning}
               onBubbleClick={
                 voiceExperience.canInterrupt ? voiceExperience.interruptVoice : undefined
               }
@@ -162,6 +163,7 @@ export const DeviceShell: React.FC<DeviceShellProps> = ({
             isSimulated={voiceExperience.isSimulated}
             variant="desktop-integrated"
             errorMessage={voiceExperience.error?.message ?? null}
+            tuning={voiceExperience.tuning}
             onBubbleClick={
               voiceExperience.canInterrupt ? voiceExperience.interruptVoice : undefined
             }

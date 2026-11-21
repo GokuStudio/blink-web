@@ -26,6 +26,10 @@ import {
   createVoiceSessionProvider,
   resolveVoiceProviderConfig,
 } from '../services/voice-provider-factory';
+import {
+  listAudioInputDevices,
+  type AudioInputDeviceInfo,
+} from '../audio/microphone-capture';
 import type {
   IVoiceSession,
   VoiceAudioLevels,
@@ -84,6 +88,22 @@ export interface UseBlinkVoiceExperienceOptions {
   reportDiagnostics?: boolean;
 }
 
+export interface VoiceRingTuning {
+  ringType: 'ring' | 'mono';
+  sensitivityScale: number;
+  glowScale: number;
+  speedScale: number;
+  warmthOffset: number;
+}
+
+export const DEFAULT_VOICE_RING_TUNING: VoiceRingTuning = {
+  ringType: 'ring',
+  sensitivityScale: 1.0,
+  glowScale: 1.0,
+  speedScale: 1.0,
+  warmthOffset: 0,
+};
+
 export interface BlinkVoiceExperience {
   /** Authoritative 12-state voice experience state */
   experienceState: VoiceExperienceState;
@@ -103,6 +123,8 @@ export interface BlinkVoiceExperience {
   isSimulated: boolean;
   /** Active provider kind ('gemini-live' | 'mock') */
   providerKind: VoiceProviderKind;
+  /** Configured token endpoint URL (empty if not configured) */
+  tokenEndpoint: string;
   /** True when live Gemini token endpoint is configured in env */
   isLiveEndpointConfigured: boolean;
   /** True when this browser context supports voice capture */
@@ -111,6 +133,16 @@ export interface BlinkVoiceExperience {
   error: VoiceSessionError | null;
   /** High-frequency 60 FPS audio levels ref (no React re-renders) */
   audioLevelsRef: React.MutableRefObject<VoiceAudioLevels>;
+
+  // Audio device & visualizer tuning controls
+  audioInputDevices: AudioInputDeviceInfo[];
+  selectedAudioDeviceId: string;
+  setSelectedAudioDeviceId: (deviceId: string) => void;
+  refreshAudioDevices: () => Promise<void>;
+  switchProvider: (kind: VoiceProviderKind) => void;
+  tuning: VoiceRingTuning;
+  updateTuning: (partial: Partial<VoiceRingTuning>) => void;
+  resetTuning: () => void;
 
   // Actions
   startVoice: () => Promise<void>;
@@ -152,6 +184,29 @@ export function useBlinkVoiceExperience(
     (initialProvider ?? resolvedConfig.provider) === 'mock'
   );
   const [error, setError] = useState<VoiceSessionError | null>(null);
+  const [audioInputDevices, setAudioInputDevices] = useState<AudioInputDeviceInfo[]>([]);
+  const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState<string>('default');
+  const [tuning, setTuning] = useState<VoiceRingTuning>({ ...DEFAULT_VOICE_RING_TUNING });
+
+  const selectedAudioDeviceIdRef = useRef(selectedAudioDeviceId);
+  selectedAudioDeviceIdRef.current = selectedAudioDeviceId;
+
+  const refreshAudioDevices = useCallback(async () => {
+    try {
+      const devices = await listAudioInputDevices();
+      setAudioInputDevices(devices);
+    } catch {
+      // Ignore enumeration errors in unsupported environments
+    }
+  }, []);
+
+  const updateTuning = useCallback((partial: Partial<VoiceRingTuning>) => {
+    setTuning((prev) => ({ ...prev, ...partial }));
+  }, []);
+
+  const resetTuning = useCallback(() => {
+    setTuning({ ...DEFAULT_VOICE_RING_TUNING });
+  }, []);
 
   const sessionRef = useRef<IVoiceSession | null>(null);
   const unsubStateRef = useRef<(() => void) | null>(null);
@@ -466,7 +521,13 @@ export function useBlinkVoiceExperience(
       attachSession(session);
 
       try {
-        await session.start();
+        const deviceIdOpt =
+          selectedAudioDeviceIdRef.current && selectedAudioDeviceIdRef.current !== 'default'
+            ? { audioInputDeviceId: selectedAudioDeviceIdRef.current }
+            : undefined;
+        await session.start(deviceIdOpt);
+        // Refresh labeled microphones after browser grants mic permission
+        void refreshAudioDevices();
         // Verify session actually reached an active state; if start() resolved in error/idle, sync cleanly
         const postSnap = session.getSnapshot();
         if (postSnap.state === 'error') {
@@ -571,6 +632,22 @@ export function useBlinkVoiceExperience(
     }
   }, [transitionTo]);
 
+  const switchProvider = useCallback(
+    (kind: VoiceProviderKind) => {
+      if (kind === providerKind) return;
+      clearAllTimers();
+      disposeActiveSession();
+      releaseVisualOwnership();
+      machineRef.current.forceReset();
+      setExperienceState('EYE_IDLE');
+      setError(null);
+      setIsMuted(false);
+      setProviderKind(kind);
+      setIsSimulated(kind === 'mock');
+    },
+    [clearAllTimers, disposeActiveSession, providerKind, releaseVisualOwnership]
+  );
+
   // Forward browser tab visibility changes to active session
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -603,10 +680,19 @@ export function useBlinkVoiceExperience(
     isMuted,
     isSimulated,
     providerKind,
+    tokenEndpoint: resolvedConfig.tokenEndpoint,
     isLiveEndpointConfigured: resolvedConfig.isLiveConfigured,
     isVoiceSupported,
     error,
     audioLevelsRef,
+    audioInputDevices,
+    selectedAudioDeviceId,
+    setSelectedAudioDeviceId,
+    refreshAudioDevices,
+    switchProvider,
+    tuning,
+    updateTuning,
+    resetTuning,
     startVoice,
     startPreviewVoice,
     endVoice,

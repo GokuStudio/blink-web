@@ -17,6 +17,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReducedMotion } from 'framer-motion';
 import { VoiceRing, type VoiceOrbState, type TypeOpts } from 'voice-ring';
 import type { VoiceAudioLevels } from '../services/voice-session.interface';
+import type { VoiceRingTuning } from '../integration/useBlinkVoiceExperience';
 import {
   getVoiceStatusCaption,
   type VoiceExperienceState,
@@ -35,6 +36,8 @@ export interface BlinkVoiceBubbleProps {
   variant?: 'desktop-integrated' | 'standalone-device';
   /** Concise error explanation displayed calmly in VOICE_ERROR state */
   errorMessage?: string | null;
+  /** Optional user-adjusted visualizer tuning (ring/mono, sensitivity, glow, speed, warmth) */
+  tuning?: VoiceRingTuning;
   /** Optional click handler (e.g. tap bubble to interrupt while speaking) */
   onBubbleClick?: () => void;
 }
@@ -221,6 +224,7 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
   isSimulated = false,
   variant = 'desktop-integrated',
   errorMessage = null,
+  tuning: userTuning,
   onBubbleClick,
 }) => {
   const prefersReducedMotion = Boolean(useReducedMotion());
@@ -283,9 +287,30 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
   }, [audioLevelsRef]);
 
   const ringState = mapExperienceToRingState(experienceState);
-  const tuning = useMemo(
+  const baseTuning = useMemo(
     () => getPaletteOptsForState(experienceState, prefersReducedMotion),
     [experienceState, prefersReducedMotion]
+  );
+
+  const ringType = userTuning?.ringType ?? 'ring';
+  const sensitivityScale = userTuning?.sensitivityScale ?? 1;
+  const glowScale = userTuning?.glowScale ?? 1;
+  const speedScale = userTuning?.speedScale ?? 1;
+  const warmthOffset = userTuning?.warmthOffset ?? 0;
+
+  const tuning = useMemo(
+    () => ({
+      ...baseTuning,
+      speed: baseTuning.speed * speedScale,
+      sensitivity: baseTuning.sensitivity * sensitivityScale,
+      opts: {
+        ...baseTuning.opts,
+        glowSize: (baseTuning.opts.glowSize ?? 0.9) * glowScale,
+        bloom: (baseTuning.opts.bloom ?? 0.48) * glowScale,
+        warmth: Math.max(-1, Math.min(1, (baseTuning.opts.warmth ?? -0.2) + warmthOffset)),
+      },
+    }),
+    [baseTuning, glowScale, sensitivityScale, speedScale, warmthOffset]
   );
 
   const isEntering =
@@ -363,7 +388,7 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
       >
         {canvasSupported ? (
           <VoiceRing
-            type="ring"
+            type={ringType}
             state={ringState}
             size={ringSize}
             level={getAudioLevel}
