@@ -1,23 +1,19 @@
 /**
- * Blink Stage 2D — Grouped Voice Ring Settings & Tuning Popover
+ * Blink Stage 2D — DialKit-Powered Voice & Ring Controls Popover
  *
- * Organized into clean collapsible sections:
- * - Engine & Audio: Gemini Live vs Preview, Microphone selector, Show status text toggle
- * - Ring Appearance: Ring vs Mono variant, Luminance & Glow, Color Warmth
+ * Uses authentic DialKit UI components (`Folder`, `SelectControl`, `Toggle`,
+ * `Slider`, `ButtonGroup`) styled with `dialkit/styles.css` in dark mode:
+ * - Engine & Audio: Voice Engine (Gemini Live / Preview), Microphone selector,
+ *   Show status text toggle, Refresh Mics action
+ * - Ring Appearance: Ring Variant (Ring / Mono), Luminance & Glow, Color Warmth
  * - Ring Motion: Audio Reactivity, Motion Speed
+ * - Footer: Reset Defaults
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  SlidersHorizontal,
-  Mic,
-  RefreshCw,
-  RotateCcw,
-  X,
-  Radio,
-  Sparkles,
-  ChevronDown,
-} from 'lucide-react';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { SlidersHorizontal, X } from 'lucide-react';
+import { ButtonGroup, Folder, SelectControl, Slider, Toggle } from 'dialkit';
+import 'dialkit/styles.css';
 import type { BlinkVoiceExperience } from '../integration/useBlinkVoiceExperience';
 
 export interface BlinkVoiceSettingsPopoverProps {
@@ -29,115 +25,15 @@ export interface BlinkVoiceSettingsPopoverProps {
   placement?: 'dock-left' | 'capsule';
 }
 
-interface SectionGroupProps {
-  title: string;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-  testId?: string;
-}
+const PROVIDER_OPTIONS = [
+  { value: 'gemini-live', label: 'Gemini Live' },
+  { value: 'mock', label: 'Preview' },
+];
 
-const SectionGroup: React.FC<SectionGroupProps> = ({
-  title,
-  open,
-  onToggle,
-  children,
-  testId,
-}) => (
-  <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] overflow-hidden">
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={open}
-      data-testid={testId}
-      className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-white/[0.04] transition-colors cursor-pointer"
-    >
-      <span className="text-[10.5px] font-mono uppercase tracking-[0.08em] text-neutral-300">
-        {title}
-      </span>
-      <ChevronDown
-        className={`h-3.5 w-3.5 text-neutral-500 transition-transform duration-200 ${
-          open ? 'rotate-180 text-neutral-300' : ''
-        }`}
-      />
-    </button>
-    {open && <div className="px-3 pb-3 pt-1.5 space-y-2.5 border-t border-white/[0.05]">{children}</div>}
-  </div>
-);
-
-interface SwitchRowProps {
-  label: string;
-  hint?: string;
-  checked: boolean;
-  onToggle: () => void;
-  testId?: string;
-}
-
-const SwitchRow: React.FC<SwitchRowProps> = ({ label, hint, checked, onToggle, testId }) => (
-  <div className="flex items-center justify-between gap-2">
-    <div>
-      <span className="text-[11px] text-neutral-200 block leading-tight">{label}</span>
-      {hint && <span className="text-[9.5px] text-neutral-500 block">{hint}</span>}
-    </div>
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={onToggle}
-      data-testid={testId}
-      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[#35DFFF] ${
-        checked
-          ? 'bg-[#35DFFF]/30 border-[#35DFFF]/50'
-          : 'bg-white/[0.08] border-white/[0.12]'
-      }`}
-    >
-      <span
-        className={`inline-block h-3.5 w-3.5 rounded-full transition-transform ${
-          checked ? 'translate-x-[18px] bg-[#35DFFF]' : 'translate-x-[2px] bg-neutral-400'
-        }`}
-      />
-    </button>
-  </div>
-);
-
-interface SliderRowProps {
-  label: string;
-  valueLabel: string;
-  min: number;
-  max: number;
-  step: number;
-  value: number;
-  onChange: (next: number) => void;
-  testId?: string;
-}
-
-const SliderRow: React.FC<SliderRowProps> = ({
-  label,
-  valueLabel,
-  min,
-  max,
-  step,
-  value,
-  onChange,
-  testId,
-}) => (
-  <label className="block">
-    <div className="flex justify-between text-[11px] text-neutral-300 mb-1">
-      <span>{label}</span>
-      <span className="font-mono text-[10.5px] text-neutral-400">{valueLabel}</span>
-    </div>
-    <input
-      type="range"
-      min={min}
-      max={max}
-      step={step}
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      data-testid={testId}
-      className="w-full accent-[#35DFFF] cursor-pointer h-1.5"
-    />
-  </label>
-);
+const RING_VARIANT_OPTIONS = [
+  { value: 'ring', label: 'Ring' },
+  { value: 'mono', label: 'Mono' },
+];
 
 export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps> = ({
   voice,
@@ -148,16 +44,6 @@ export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps>
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    engine: true,
-    appearance: true,
-    motion: false,
-  });
-
-  const toggleGroup = (id: string) => {
-    setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
   // Refresh available audio devices whenever popover opens
   useEffect(() => {
     if (open) {
@@ -165,17 +51,29 @@ export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps>
     }
   }, [open, voice.refreshAudioDevices]);
 
-  // Close on Escape or outside click
+  // Close on Escape or outside click (respecting open DialKit select dropdowns & slider inputs)
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-      }
+      if (e.key !== 'Escape') return;
+      const hasOpenDropdown = Boolean(
+        containerRef.current?.querySelector('.dialkit-select-trigger[data-open="true"]')
+      );
+      const activeEl = document.activeElement;
+      const isEditingSlider =
+        activeEl instanceof HTMLElement && activeEl.classList.contains('dialkit-slider-input');
+      if (hasOpenDropdown || isEditingSlider) return;
+      e.stopPropagation();
+      onClose();
     };
     const onPointerDown = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (containerRef.current && !containerRef.current.contains(target)) {
+        // Also ignore clicks on portaled DialKit popovers if ever mounted on body
+        if (target instanceof Element && target.closest('.dialkit-select-dropdown')) {
+          return;
+        }
         onClose();
       }
     };
@@ -188,6 +86,17 @@ export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps>
   }, [open, onClose]);
 
   const { tuning, updateTuning, resetTuning } = voice;
+
+  const micOptions = useMemo(
+    () => [
+      { value: 'default', label: 'System Default' },
+      ...voice.audioInputDevices.map((dev) => ({
+        value: dev.deviceId,
+        label: dev.label,
+      })),
+    ],
+    [voice.audioInputDevices]
+  );
 
   const triggerClassName =
     placement === 'dock-left'
@@ -208,7 +117,7 @@ export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps>
       : 'bottom-[calc(100%+12px)] right-0';
 
   return (
-    <div ref={containerRef} className="relative inline-flex items-center">
+    <div ref={containerRef} className="dialkit-root relative inline-flex items-center">
       <button
         type="button"
         onClick={onToggle}
@@ -230,15 +139,15 @@ export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps>
           role="dialog"
           aria-label="Voice settings and ring tuning"
           data-testid="voice-settings-popover"
-          className={`absolute z-[70] w-[320px] max-w-[calc(100vw-24px)] max-h-[min(78dvh,540px)] flex flex-col rounded-2xl border border-white/[0.11] bg-[#111316]/96 text-left shadow-[0_24px_64px_rgba(0,0,0,0.88)] backdrop-blur-xl overflow-hidden ${popoverPositionClass}`}
+          className={`absolute z-[70] w-[312px] max-w-[calc(100vw-24px)] max-h-[min(80dvh,560px)] flex flex-col rounded-[14px] border border-[var(--dial-border)] bg-[#1d1f23] text-left shadow-[0_24px_64px_rgba(0,0,0,0.88)] overflow-hidden [&_.dialkit-select-right]:min-w-0 [&_.dialkit-select-trigger]:gap-3 ${popoverPositionClass}`}
         >
           {/* Sticky Header */}
-          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/[0.07] shrink-0">
-            <div>
-              <h3 className="text-[12.5px] font-semibold text-[#F2F4F1] tracking-[-0.01em]">
+          <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-[var(--dial-surface-subtle)] shrink-0">
+            <div className="min-w-0">
+              <h3 className="text-[13.5px] font-semibold text-[var(--dial-text-root)] tracking-[-0.01em] truncate">
                 Voice &amp; Ring Controls
               </h3>
-              <p className="text-[10.5px] text-neutral-400 mt-0.5">
+              <p className="text-[10.5px] text-[var(--dial-text-secondary)] mt-0.5 truncate">
                 {voice.providerKind === 'gemini-live'
                   ? voice.isLiveEndpointConfigured
                     ? 'Gemini Live · token endpoint ready'
@@ -250,194 +159,104 @@ export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps>
               type="button"
               onClick={onClose}
               aria-label="Close voice settings"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-neutral-400 hover:bg-white/[0.08] hover:text-white cursor-pointer"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--dial-text-secondary)] hover:bg-[var(--dial-surface-hover)] hover:text-[var(--dial-text-focus)] transition-colors cursor-pointer"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
 
-          {/* Scrollable Grouped Sections */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5">
-            {/* GROUP 1: Engine, Mic & Display */}
-            <SectionGroup
-              title="Engine & Audio"
-              open={openGroups.engine}
-              onToggle={() => toggleGroup('engine')}
-              testId="voice-group-engine"
-            >
-              <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-black/45 p-1 border border-white/[0.06]">
-                <button
-                  type="button"
-                  onClick={() => voice.switchProvider('gemini-live')}
-                  data-testid="voice-provider-gemini"
-                  aria-pressed={voice.providerKind === 'gemini-live'}
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-medium transition-colors cursor-pointer ${
-                    voice.providerKind === 'gemini-live'
-                      ? 'bg-[#35DFFF]/18 text-[#DFF8FF] border border-[#35DFFF]/35'
-                      : 'text-neutral-400 hover:text-neutral-200 border border-transparent'
-                  }`}
-                >
-                  <Radio className="h-3 w-3 text-[#35DFFF]" />
-                  <span>Gemini Live</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => voice.switchProvider('mock')}
-                  data-testid="voice-provider-mock"
-                  aria-pressed={voice.providerKind === 'mock'}
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-medium transition-colors cursor-pointer ${
-                    voice.providerKind === 'mock'
-                      ? 'bg-white/[0.12] text-white border border-white/[0.16]'
-                      : 'text-neutral-400 hover:text-neutral-200 border border-transparent'
-                  }`}
-                >
-                  <Sparkles className="h-3 w-3 text-sky-300" />
-                  <span>Preview</span>
-                </button>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="blink-mic-select"
-                    className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.06em] text-neutral-400"
-                  >
-                    <Mic className="h-3 w-3 text-[#35DFFF]" />
-                    <span>Microphone</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => void voice.refreshAudioDevices()}
-                    aria-label="Refresh microphones"
-                    className="inline-flex items-center gap-1 text-[10px] text-neutral-400 hover:text-white cursor-pointer"
-                  >
-                    <RefreshCw className="h-2.5 w-2.5" />
-                    <span>Refresh</span>
-                  </button>
-                </div>
-                <select
-                  id="blink-mic-select"
-                  data-testid="voice-mic-select"
+          {/* Scrollable DialKit Folders */}
+          <div className="flex-1 overflow-y-auto px-3 py-2">
+            <div className="dialkit-folder-inner !pb-1">
+              <Folder title="Engine & Audio" defaultOpen={true}>
+                <SelectControl
+                  label="Voice Engine"
+                  value={voice.providerKind}
+                  options={PROVIDER_OPTIONS}
+                  onChange={(next) => voice.switchProvider(next as 'gemini-live' | 'mock')}
+                />
+                <SelectControl
+                  label="Microphone"
                   value={voice.selectedAudioDeviceId}
-                  onChange={(e) => voice.setSelectedAudioDeviceId(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/[0.10] bg-black/55 px-2.5 py-1.5 text-[11px] text-neutral-200 focus:border-[#35DFFF]/60 focus:outline-none"
-                >
-                  <option value="default">System Default Microphone</option>
-                  {voice.audioInputDevices.map((dev) => (
-                    <option key={dev.deviceId} value={dev.deviceId}>
-                      {dev.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  options={micOptions}
+                  onChange={(next) => voice.setSelectedAudioDeviceId(next)}
+                />
+                <Toggle
+                  label="Show status text"
+                  checked={tuning.showStatusLabel}
+                  onChange={(checked) => updateTuning({ showStatusLabel: checked })}
+                />
+                <ButtonGroup
+                  buttons={[
+                    {
+                      label: 'Refresh Mics',
+                      onClick: () => void voice.refreshAudioDevices(),
+                    },
+                  ]}
+                />
+              </Folder>
 
-              <SwitchRow
-                label="Show status text"
-                hint="Hide Listening / Thinking / Speaking pill"
-                checked={tuning.showStatusLabel}
-                onToggle={() => updateTuning({ showStatusLabel: !tuning.showStatusLabel })}
-                testId="voice-toggle-status-label"
-              />
-            </SectionGroup>
+              <Folder title="Ring Appearance" defaultOpen={true}>
+                <SelectControl
+                  label="Ring Variant"
+                  value={tuning.ringType}
+                  options={RING_VARIANT_OPTIONS}
+                  onChange={(next) => updateTuning({ ringType: next as 'ring' | 'mono' })}
+                />
+                <Slider
+                  label="Luminance & Glow"
+                  value={tuning.glowScale}
+                  min={0.35}
+                  max={1.45}
+                  step={0.05}
+                  onChange={(v) => updateTuning({ glowScale: v })}
+                />
+                <Slider
+                  label="Color Warmth"
+                  value={tuning.warmthOffset}
+                  min={-0.4}
+                  max={0.4}
+                  step={0.05}
+                  onChange={(v) => updateTuning({ warmthOffset: v })}
+                />
+              </Folder>
 
-            {/* GROUP 2: Ring Appearance */}
-            <SectionGroup
-              title="Ring Appearance"
-              open={openGroups.appearance}
-              onToggle={() => toggleGroup('appearance')}
-              testId="voice-group-ring-appearance"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-neutral-300">Ring Variant</span>
-                <div className="inline-flex rounded-lg bg-black/45 p-0.5 border border-white/[0.06]">
-                  {(['ring', 'mono'] as const).map((variant) => (
-                    <button
-                      key={variant}
-                      type="button"
-                      onClick={() => updateTuning({ ringType: variant })}
-                      data-testid={`voice-ring-type-${variant}`}
-                      className={`rounded-md px-2.5 py-0.5 text-[10.5px] font-medium capitalize transition-colors cursor-pointer ${
-                        tuning.ringType === variant
-                          ? 'bg-[#35DFFF]/20 text-[#DFF8FF]'
-                          : 'text-neutral-400 hover:text-neutral-200'
-                      }`}
-                    >
-                      {variant}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <SliderRow
-                label="Luminance & Glow"
-                valueLabel={`${Math.round(tuning.glowScale * 100)}%`}
-                min={0.35}
-                max={1.45}
-                step={0.05}
-                value={tuning.glowScale}
-                onChange={(v) => updateTuning({ glowScale: v })}
-                testId="voice-slider-glow"
-              />
-
-              <SliderRow
-                label="Color Warmth"
-                valueLabel={
-                  tuning.warmthOffset >= 0
-                    ? `+${tuning.warmthOffset.toFixed(2)}`
-                    : tuning.warmthOffset.toFixed(2)
-                }
-                min={-0.4}
-                max={0.4}
-                step={0.05}
-                value={tuning.warmthOffset}
-                onChange={(v) => updateTuning({ warmthOffset: v })}
-                testId="voice-slider-warmth"
-              />
-            </SectionGroup>
-
-            {/* GROUP 3: Ring Motion */}
-            <SectionGroup
-              title="Ring Motion"
-              open={openGroups.motion}
-              onToggle={() => toggleGroup('motion')}
-              testId="voice-group-ring-motion"
-            >
-              <SliderRow
-                label="Audio Reactivity"
-                valueLabel={`${Math.round(tuning.sensitivityScale * 100)}%`}
-                min={0.5}
-                max={1.6}
-                step={0.05}
-                value={tuning.sensitivityScale}
-                onChange={(v) => updateTuning({ sensitivityScale: v })}
-                testId="voice-slider-sensitivity"
-              />
-
-              <SliderRow
-                label="Motion Speed"
-                valueLabel={`${tuning.speedScale.toFixed(2)}x`}
-                min={0.4}
-                max={1.6}
-                step={0.05}
-                value={tuning.speedScale}
-                onChange={(v) => updateTuning({ speedScale: v })}
-                testId="voice-slider-speed"
-              />
-            </SectionGroup>
+              <Folder title="Ring Motion" defaultOpen={false}>
+                <Slider
+                  label="Audio Reactivity"
+                  value={tuning.sensitivityScale}
+                  min={0.5}
+                  max={1.6}
+                  step={0.05}
+                  onChange={(v) => updateTuning({ sensitivityScale: v })}
+                />
+                <Slider
+                  label="Motion Speed"
+                  value={tuning.speedScale}
+                  min={0.4}
+                  max={1.6}
+                  step={0.05}
+                  unit="x"
+                  onChange={(v) => updateTuning({ speedScale: v })}
+                />
+              </Folder>
+            </div>
           </div>
 
-          {/* Sticky Footer */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-t border-white/[0.07] bg-black/30 shrink-0">
-            <span className="text-[10px] text-neutral-500">libraries.dev/voice-ring</span>
-            <button
-              type="button"
-              onClick={resetTuning}
-              data-testid="voice-tuning-reset"
-              className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10.5px] text-neutral-400 hover:bg-white/[0.07] hover:text-white cursor-pointer"
-            >
-              <RotateCcw className="h-3 w-3" />
-              <span>Reset defaults</span>
-            </button>
+          {/* Sticky Footer with DialKit ButtonGroup */}
+          <div className="px-3 py-2.5 border-t border-[var(--dial-surface-subtle)] bg-black/25 shrink-0 space-y-2">
+            <ButtonGroup
+              buttons={[
+                {
+                  label: 'Reset Defaults',
+                  onClick: resetTuning,
+                },
+              ]}
+            />
+            <div className="flex items-center justify-between text-[10px] text-[var(--dial-text-tertiary)] px-0.5">
+              <span>libraries.dev/voice-ring</span>
+              <span>dialkit</span>
+            </div>
           </div>
         </div>
       )}

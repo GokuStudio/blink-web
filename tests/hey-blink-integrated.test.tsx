@@ -18,6 +18,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+
+// JSDOM does not implement scrollIntoView used by DialKit SelectControl keyboard focus
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
 import fs from 'node:fs';
 import path from 'node:path';
 import { DemoPage } from '@/pages/DemoPage';
@@ -628,30 +633,38 @@ describe('Blink Stage 2D — Hey Blink Integrated Voice Assistant', () => {
     expect(envContent).not.toContain('GEMINI_API_KEY');
   });
 
-  it('11. opens Voice Settings popover on /demo to adjust grouped ring sliders and hide status text', async () => {
+  it('11. opens DialKit Voice Settings popover on /demo to adjust grouped ring sliders, toggles, selects, and hide status text', async () => {
     const fakeSession = new FakeVoiceSession({ isSimulated: true });
     renderDemoWithVoice(sharedRealtime, () => fakeSession);
 
     fireEvent.click(screen.getByTestId('voice-settings-trigger'));
     expect(await screen.findByTestId('voice-settings-popover')).toBeInTheDocument();
 
-    // Switch ring style to mono, expand Ring Motion group, and adjust sensitivity slider
-    fireEvent.click(screen.getByTestId('voice-ring-type-mono'));
-    fireEvent.click(screen.getByTestId('voice-group-ring-motion'));
-    fireEvent.change(screen.getByTestId('voice-slider-sensitivity'), { target: { value: '1.3' } });
-    expect((screen.getByTestId('voice-slider-sensitivity') as HTMLInputElement).value).toBe('1.3');
+    // Expand DialKit "Ring Motion" folder and step DialKit "Audio Reactivity" slider via keyboard
+    fireEvent.click(screen.getByRole('button', { name: 'Ring Motion' }));
+    const sensitivitySlider = await screen.findByRole('slider', { name: 'Audio Reactivity' });
+    expect(sensitivitySlider).toHaveAttribute('aria-valuenow', '1');
+    fireEvent.keyDown(sensitivitySlider, { key: 'ArrowRight' });
+    expect(sensitivitySlider).toHaveAttribute('aria-valuenow', '1.05');
 
-    // Toggle "Show status text" off and confirm status pill hides while Voice Ring stays active
+    // Switch DialKit "Ring Variant" SelectControl to Mono
+    const variantSelect = screen.getByRole('button', { name: /Ring Variant/i });
+    fireEvent.click(variantSelect);
+    fireEvent.click(await screen.findByRole('button', { name: 'Mono' }));
+    expect(variantSelect).toHaveTextContent('Mono');
+
+    // Toggle DialKit "Show status text" Off and confirm status pill hides while Voice Ring stays active
     fireEvent.click(screen.getByTestId('stage-voice-toggle'));
     await waitFor(() => {
       expect(screen.getByTestId('voice-bubble-status-label')).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('voice-toggle-status-label'));
+    fireEvent.click(screen.getByRole('radio', { name: 'Off' }));
     expect(screen.queryByTestId('voice-bubble-status-label')).not.toBeInTheDocument();
 
-    // Reset defaults restores 1.0 and status text visible
-    fireEvent.click(screen.getByTestId('voice-tuning-reset'));
-    expect((screen.getByTestId('voice-slider-sensitivity') as HTMLInputElement).value).toBe('1');
+    // DialKit "Reset Defaults" ButtonGroup restores 1.0, Ring variant, and status text visible
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Defaults' }));
+    expect(sensitivitySlider).toHaveAttribute('aria-valuenow', '1');
+    expect(variantSelect).toHaveTextContent('Ring');
     expect(screen.getByTestId('voice-bubble-status-label')).toBeInTheDocument();
 
     // Escape closes popover cleanly
