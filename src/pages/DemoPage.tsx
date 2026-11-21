@@ -73,7 +73,7 @@ function getStageStatusMeta(
         label: 'Ready',
         dotClass: 'bg-[#35DFFF]',
         textClass: 'text-neutral-200',
-        caption: 'Autonomous idle active · Enable camera to mirror your eyes live',
+        caption: 'Enable camera to mirror your eyes live',
       };
     case 'READY':
       return {
