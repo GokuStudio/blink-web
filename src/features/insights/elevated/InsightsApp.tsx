@@ -18,7 +18,10 @@ import { HomeView } from './screens/HomeView';
 import { InsightsView } from './screens/InsightsView';
 import { AssistantView } from './screens/AssistantView';
 import { SettingsView } from './screens/SettingsView';
-import { useElevatedLiveTelemetry } from './hooks/useElevatedLiveTelemetry';
+import {
+  useElevatedLiveTelemetry,
+  type ElevatedLiveTelemetryState,
+} from './hooks/useElevatedLiveTelemetry';
 import type { IRealtimeService } from '@/shared/realtime/interfaces/realtime-service.interface';
 import './elevated.css';
 
@@ -34,14 +37,31 @@ function parseDestination(param: string | null): DestinationId {
   return 'home';
 }
 
+function formatCurrentTime(): string {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
 export interface InsightsAppProps {
   realtimeService?: IRealtimeService;
   roomCode?: string;
+  /** When true (integrated /demo stage), scopes dock, scroll, and toasts to the companion phone frame. */
+  embedded?: boolean;
+  /** When false, external room coordinator owns connect/disconnect on the shared realtimeService. */
+  manageConnection?: boolean;
+  onReconnectOverride?: () => Promise<void>;
+  onSwitchRoomOverride?: (roomCode: string) => Promise<void>;
+  onLiveStateChange?: (state: ElevatedLiveTelemetryState) => void;
 }
 
 export const InsightsApp: React.FC<InsightsAppProps> = ({
   realtimeService,
   roomCode,
+  embedded = false,
+  manageConnection = true,
+  onReconnectOverride,
+  onSwitchRoomOverride,
+  onLiveStateChange,
 }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [destination, setDestination] = useState<DestinationId>(() =>
@@ -51,7 +71,38 @@ export const InsightsApp: React.FC<InsightsAppProps> = ({
   const live = useElevatedLiveTelemetry({
     service: realtimeService,
     roomCode,
+    manageConnection,
+    onReconnectOverride,
+    onSwitchRoomOverride,
   });
+
+  const onLiveStateChangeRef = useRef(onLiveStateChange);
+  onLiveStateChangeRef.current = onLiveStateChange;
+
+  useEffect(() => {
+    onLiveStateChangeRef.current?.(live);
+  }, [
+    live.mode,
+    live.connectionStatus,
+    live.deviceConnected,
+    live.isStale,
+    live.lastSyncTimestamp,
+    live.totalBlinks,
+    live.blinkRate,
+    live.isFaceDetected,
+    live.error,
+    live.roomCode,
+  ]);
+
+  const [clockLabel, setClockLabel] = useState<string>(() =>
+    embedded ? formatCurrentTime() : '18:33'
+  );
+  useEffect(() => {
+    if (!embedded) return;
+    setClockLabel(formatCurrentTime());
+    const id = window.setInterval(() => setClockLabel(formatCurrentTime()), 30000);
+    return () => window.clearInterval(id);
+  }, [embedded]);
 
   const [observationPaused, setObservationPaused] = useState<boolean>(false);
   const [range, setRange] = useState<TimeRangeId>('today');
@@ -69,6 +120,7 @@ export const InsightsApp: React.FC<InsightsAppProps> = ({
   const [toast, setToast] = useState<string | null>(null);
   const toastTimerRef = useRef<number | null>(null);
   const swipeTrackRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Sync destination if `?screen=` query param changes externally
   useEffect(() => {
@@ -116,11 +168,17 @@ export const InsightsApp: React.FC<InsightsAppProps> = ({
         },
         { replace: true }
       );
-      if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      if (embedded) {
+        if (typeof scrollContainerRef.current?.scrollTo === 'function') {
+          scrollContainerRef.current.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+        } else if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = 0;
+        }
+      } else if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
         window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
       }
     },
-    [setSearchParams]
+    [embedded, setSearchParams]
   );
 
   const handleRitualComplete = useCallback(() => {
@@ -130,13 +188,48 @@ export const InsightsApp: React.FC<InsightsAppProps> = ({
     live.setSimulatedBlinkRate(18);
   }, [live]);
 
+  const toastNode = (
+    <AnimatePresence>
+      {toast && (
+        <motion.div
+          role="status"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
+          transition={{ duration: 0.18 }}
+          className={`blink-elevated-scope pointer-events-none left-1/2 z-[80] -translate-x-1/2 max-w-[min(344px,calc(100%-32px))] rounded-full bg-[#192018]/95 border border-[#A6FA4C]/30 px-4 py-2 text-center text-[12px] font-medium text-[#ECF7E2] shadow-[0_14px_32px_rgba(0,0,0,0.72)] backdrop-blur-md ${
+            embedded
+              ? `absolute ${ritual.open ? 'bottom-5' : 'bottom-[90px]'}`
+              : `fixed ${
+                  ritual.open
+                    ? 'bottom-[calc(20px+env(safe-area-inset-bottom))]'
+                    : 'bottom-[calc(94px+env(safe-area-inset-bottom))]'
+                }`
+          }`}
+        >
+          {toast}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   return (
     <MotionConfig reducedMotion="user">
       <div
-        className="blink-elevated-scope min-h-dvh sm:min-h-[calc(100dvh-56px)] w-full bg-[#060707] flex justify-center"
+        className={
+          embedded
+            ? 'blink-elevated-scope relative flex h-full w-full items-center justify-center bg-transparent'
+            : 'blink-elevated-scope min-h-dvh sm:min-h-[calc(100dvh-56px)] w-full bg-[#060707] flex justify-center'
+        }
         data-testid="insights-elevated-app"
       >
-        <div className="relative w-full max-w-[390px] min-h-dvh sm:min-h-[calc(100dvh-56px)] bg-[#0D0F0E] text-[#F2F4F1] shadow-[0_0_90px_rgba(0,0,0,0.9)]">
+        <div
+          className={
+            embedded
+              ? 'relative flex h-full w-full max-w-[390px] min-[600px]:max-h-[820px] flex-col overflow-hidden min-[600px]:rounded-[38px] min-[600px]:border min-[600px]:border-white/[0.10] bg-[#0D0F0E] text-[#F2F4F1] min-[600px]:shadow-[0_32px_96px_rgba(0,0,0,0.88),0_0_0_1px_rgba(255,255,255,0.04)_inset]'
+              : 'relative w-full max-w-[390px] min-h-dvh sm:min-h-[calc(100dvh-56px)] bg-[#0D0F0E] text-[#F2F4F1] shadow-[0_0_90px_rgba(0,0,0,0.9)]'
+          }
+        >
           {/* Subtle flowing DistortionWave without wireframe DOM capture */}
           <DistortionWave
             revealed={ritual.open}
@@ -161,9 +254,10 @@ export const InsightsApp: React.FC<InsightsAppProps> = ({
               particleCount: 16,
             }}
             reducedMotion="system"
-            cornerRadius={0}
+            cornerRadius={embedded ? 38 : 0}
             style={{
               width: '100%',
+              height: embedded ? '100%' : undefined,
               minHeight: '100%',
               overflow: 'hidden',
               backgroundColor: '#0D0F0E',
@@ -184,15 +278,28 @@ export const InsightsApp: React.FC<InsightsAppProps> = ({
               />
             }
           >
-            <div className="min-h-dvh sm:min-h-[calc(100dvh-56px)] w-full bg-[#0D0F0E]">
+            <div
+              ref={scrollContainerRef}
+              className={
+                embedded
+                  ? 'h-full w-full overflow-y-auto no-scrollbar bg-[#0D0F0E]'
+                  : 'min-h-dvh sm:min-h-[calc(100dvh-56px)] w-full bg-[#0D0F0E]'
+              }
+            >
               {/* Minimal Mobile Status Bar */}
               <div
-                className="flex items-center justify-between px-5 pt-2.5 pb-1 select-none"
+                className="flex items-center justify-between px-5 pt-3 pb-1 select-none"
                 aria-label="Status bar"
               >
                 <span className="font-mono-num text-[11.5px] font-medium text-[#DCE0DD]">
-                  18:33
+                  {clockLabel}
                 </span>
+                {embedded && (
+                  <span
+                    aria-hidden="true"
+                    className="hidden min-[600px]:inline-block h-[18px] w-[72px] rounded-full bg-black/80 border border-white/[0.06]"
+                  />
+                )}
                 <div className="flex items-center gap-[5px] text-[#C8CFCB]" aria-hidden="true">
                   <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
                     <rect x="0.5" y="6.8" width="2.2" height="2.8" rx="0.6" fill="currentColor" opacity="0.5" />
@@ -308,6 +415,7 @@ export const InsightsApp: React.FC<InsightsAppProps> = ({
               active={destination}
               onSelect={navigate}
               assistantPhase={assistantPhase}
+              embedded={embedded}
               onOrbHoldStart={() => {
                 navigate('assistant');
                 setAssistantPhase('listening');
@@ -320,29 +428,10 @@ export const InsightsApp: React.FC<InsightsAppProps> = ({
             />
           )}
 
-          {/* Quiet Floating Toast (Portaled above dock and modals with scoped styles) */}
-          {typeof document !== 'undefined' &&
-            createPortal(
-              <AnimatePresence>
-                {toast && (
-                  <motion.div
-                    role="status"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    transition={{ duration: 0.18 }}
-                    className={`blink-elevated-scope pointer-events-none fixed left-1/2 z-[80] -translate-x-1/2 max-w-[min(344px,calc(100vw-32px))] rounded-full bg-[#192018]/95 border border-[#A6FA4C]/30 px-4 py-2 text-center text-[12px] font-medium text-[#ECF7E2] shadow-[0_14px_32px_rgba(0,0,0,0.72)] backdrop-blur-md ${
-                      ritual.open
-                        ? 'bottom-[calc(20px+env(safe-area-inset-bottom))]'
-                        : 'bottom-[calc(94px+env(safe-area-inset-bottom))]'
-                    }`}
-                  >
-                    {toast}
-                  </motion.div>
-                )}
-              </AnimatePresence>,
-              document.body
-            )}
+          {/* Quiet Floating Toast (scoped inside phone frame when embedded; portaled on standalone /insights) */}
+          {embedded
+            ? toastNode
+            : typeof document !== 'undefined' && createPortal(toastNode, document.body)}
 
           {/* Notifications Popover (Portaled cleanly at top above everything) */}
           <PortalSheet

@@ -111,17 +111,40 @@ export class DeviceTelemetryPublisher {
     });
 
     try {
-      // 1. Ensure room exists as creator if it does not yet exist
+      // 1. Ensure room exists as creator if it does not yet exist.
+      // Note: Under fail-closed RTDB rules, reading a non-existent room throws
+      // PERMISSION_DENIED because members[uid] does not exist yet — so if getRoom()
+      // returns null OR throws, attempt createRoom(). If createRoom() ALSO fails
+      // (e.g., room belongs to another user or auth/permission denied), fail closed
+      // and never silently report a successful connection.
+      let existingRoom = null;
+      let getRoomError: unknown = null;
       try {
-        const room = await this.roomService.getRoom(roomCode);
-        if (!room) {
+        existingRoom = await this.roomService.getRoom(roomCode);
+      } catch (err) {
+        existingRoom = null;
+        getRoomError = err;
+      }
+      if (!existingRoom) {
+        try {
           await this.roomService.createRoom({
             roomCode,
             role: this.config.role,
           });
+        } catch (createErr) {
+          const msg = (
+            createErr instanceof Error ? createErr.message : String(createErr)
+          ).toLowerCase();
+          const isPermissionOrAuthError =
+            msg.includes('permission') ||
+            msg.includes('denied') ||
+            msg.includes('unauthorized') ||
+            msg.includes('not authorized') ||
+            msg.includes('auth');
+          if (isPermissionOrAuthError || getRoomError) {
+            throw createErr;
+          }
         }
-      } catch {
-        // In mock mode or if room already created, continue to connect
       }
 
       // 2. Connect realtime service

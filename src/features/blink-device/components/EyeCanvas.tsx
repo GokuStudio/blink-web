@@ -13,6 +13,8 @@ interface EyeCanvasProps {
   isStandalone?: boolean;
   onNudgeComplete?: () => void;
   materialParams?: MaterialParams;
+  onWebGLStatusChange?: (status: 'ready' | 'unavailable' | 'context_lost' | 'restored') => void;
+  onSustainedLowFps?: (fps: number | null) => void;
 }
 
 // Map expression strings to internal shader pose IDs (0..7)
@@ -752,7 +754,13 @@ export const EyeCanvas: React.FC<EyeCanvasProps> = ({
   isStandalone = false,
   onNudgeComplete,
   materialParams: propMaterialParams,
+  onWebGLStatusChange,
+  onSustainedLowFps,
 }) => {
+  const onWebGLStatusChangeRef = useRef(onWebGLStatusChange);
+  onWebGLStatusChangeRef.current = onWebGLStatusChange;
+  const onSustainedLowFpsRef = useRef(onSustainedLowFps);
+  onSustainedLowFpsRef.current = onSustainedLowFps;
   const storeMaterialParams = useDeviceStore((s) => s.materialParams);
   const materialParamsRef = useRef<MaterialParams>(propMaterialParams ?? storeMaterialParams ?? DEFAULT_MATERIAL_PARAMS);
   materialParamsRef.current = propMaterialParams ?? storeMaterialParams ?? DEFAULT_MATERIAL_PARAMS;
@@ -886,27 +894,55 @@ export const EyeCanvas: React.FC<EyeCanvasProps> = ({
     }
 
     if (!gl) {
+      const isJsdom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent);
+      if (!isJsdom) {
+        onWebGLStatusChangeRef.current?.('unavailable');
+      }
       return;
     }
     glRef.current = gl;
 
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      onWebGLStatusChangeRef.current?.('context_lost');
+    };
+    const handleContextRestored = () => {
+      onWebGLStatusChangeRef.current?.('restored');
+    };
+    canvas.addEventListener('webglcontextlost', handleContextLost);
+    canvas.addEventListener('webglcontextrestored', handleContextRestored);
+
     // Build shader program
     const vs = createShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER_SOURCE);
     const fs = createShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER_SOURCE);
-    if (!vs || !fs) return;
+    if (!vs || !fs) {
+      onWebGLStatusChangeRef.current?.('unavailable');
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
+      canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+      return;
+    }
 
     const program = gl.createProgram();
-    if (!program) return;
+    if (!program) {
+      onWebGLStatusChangeRef.current?.('unavailable');
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
+      canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+      return;
+    }
     gl.attachShader(program, vs);
     gl.attachShader(program, fs);
     gl.linkProgram(program);
 
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
       console.error('Program link error:', gl.getProgramInfoLog(program));
+      onWebGLStatusChangeRef.current?.('unavailable');
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
+      canvas.removeEventListener('webglcontextrestored', handleContextRestored);
       return;
     }
     programRef.current = program;
     gl.useProgram(program);
+    onWebGLStatusChangeRef.current?.('ready');
 
     // Fullscreen quad buffer
     const positionBuffer = gl.createBuffer();
@@ -960,10 +996,44 @@ export const EyeCanvas: React.FC<EyeCanvasProps> = ({
 
     // Animation Loop
     let startTime = performance.now();
+    let fpsBucketStart = startTime;
+    let fpsFrames = 0;
+    let lowFpsConsecutiveSeconds = 0;
+    let lowFpsReported = false;
+
     const render = (now: number) => {
       updateSize();
       const elapsed = (now - startTime) * 0.001;
       const nowMs = Date.now();
+
+      // Sustained low-FPS measurement (never triggers on single slow frames or hidden tabs)
+      const isTabVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+      if (!isTabVisible) {
+        fpsBucketStart = now;
+        fpsFrames = 0;
+        lowFpsConsecutiveSeconds = 0;
+      } else {
+        fpsFrames++;
+        const bucketElapsed = now - fpsBucketStart;
+        if (bucketElapsed >= 1000) {
+          const measuredFps = Math.round((fpsFrames * 1000) / bucketElapsed);
+          fpsBucketStart = now;
+          fpsFrames = 0;
+          if (measuredFps < 18) {
+            lowFpsConsecutiveSeconds++;
+            if (lowFpsConsecutiveSeconds >= 4 && !lowFpsReported) {
+              lowFpsReported = true;
+              onSustainedLowFpsRef.current?.(measuredFps);
+            }
+          } else {
+            lowFpsConsecutiveSeconds = 0;
+            if (lowFpsReported && measuredFps >= 24) {
+              lowFpsReported = false;
+              onSustainedLowFpsRef.current?.(null);
+            }
+          }
+        }
+      }
 
       const prefersReducedMotion =
         typeof window !== 'undefined' &&
@@ -1210,6 +1280,8 @@ export const EyeCanvas: React.FC<EyeCanvasProps> = ({
         cancelAnimationFrame(animFrameRef.current);
       }
       window.removeEventListener('resize', updateSize);
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
+      canvas.removeEventListener('webglcontextrestored', handleContextRestored);
     };
   }, [brightness, isStandalone]);
 

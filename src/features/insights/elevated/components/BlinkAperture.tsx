@@ -283,19 +283,34 @@ export const BlinkAperture: React.FC<BlinkApertureProps> = ({
             <WifiOff className="h-6 w-6" strokeWidth={1.7} />
             <span className="text-[13px] font-medium text-[#98A09A]">Node away</span>
           </div>
-        ) : paused || blinkRate <= 0 ? (
+        ) : paused ? (
           <div className="flex flex-col items-center gap-1.5 text-[#98A09A]">
             <span className="font-num text-[48px] font-semibold leading-none text-[#8C938E] tabular-nums">
-              0
+              {zone.shortLabel === 'Standby' ? '—' : '0'}
             </span>
             <span className="inline-flex items-center gap-1 text-[12px] text-[#8E9690]">
-              <Pause className="h-3 w-3" /> Paused
+              {zone.shortLabel === 'Standby' ? (
+                <span className="text-[#7CE8FF]">Ready · Standby</span>
+              ) : (
+                <>
+                  <Pause className="h-3 w-3" /> {zone.shortLabel === 'Face Away' ? 'Face away' : 'Paused'}
+                </>
+              )}
+            </span>
+          </div>
+        ) : blinkRate <= 0 && !isValidZero ? (
+          <div className="flex flex-col items-center gap-1 text-[#98A09A]">
+            <span className="font-num text-[52px] font-semibold leading-none text-[#C8CFCB] tabular-nums">
+              —
+            </span>
+            <span className="mt-0.5 text-[12px] font-medium text-[#8E9690]">
+              Acquiring 30s baseline
             </span>
           </div>
         ) : (
           <>
             <span className="font-num text-[60px] font-semibold leading-none tracking-[-0.04em] text-[#F4F6F3] tabular-nums">
-              {displayNumber}
+              {isValidZero ? '0' : displayNumber}
             </span>
             <span className="mt-1 text-[13px] font-medium tracking-[0.01em] text-[#98A09A]">
               per min

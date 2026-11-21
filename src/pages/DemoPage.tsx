@@ -1,318 +1,537 @@
-import React, { useState } from 'react';
-import { DeviceShell, EyeTrackingDevPanel, usePersonalityStore } from '@/features/blink-device';
-import { useDeviceStore } from '@/features/blink-device/state';
-import { BlinkExpressionType } from '@/shared/contracts';
-import { InsightsShell } from '@/features/insights';
-import { Navbar } from '@/shared/components/layout/Navbar';
-import { Sliders, RefreshCw, Smartphone, Sparkles, Activity } from 'lucide-react';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import {
+  Camera,
+  CameraOff,
+  Eye,
+  EyeOff,
+  Loader2,
+  Monitor,
+  Smartphone,
+  RefreshCw,
+} from 'lucide-react';
+import { DeviceShell } from '@/features/blink-device';
+import { useDeviceStore } from '@/features/blink-device/state';
+import { useTrackingStore } from '@/features/blink-device/state/trackingStore';
+import type { BlinkExpressionType } from '@/shared/contracts';
+import type { IRealtimeService } from '@/shared/realtime/interfaces/realtime-service.interface';
+import { InsightsApp } from '@/features/insights/elevated/InsightsApp';
+import {
+  useIntegratedDemoSession,
+  type IntegratedStageState,
+} from '@/features/demo/useIntegratedDemoSession';
+import {
+  IssueCenterTrigger,
+  IssueCenterPanel,
+} from '@/features/demo/diagnostics/IssueCenter';
+import {
+  ExploreBlinkTrigger,
+  ExploreBlinkContent,
+  useExploreBlinkProgress,
+} from '@/features/demo/ExploreBlinkPanel';
+import { RoomSessionPopover } from '@/features/demo/RoomSessionPopover';
+import { useMediaQuery } from '@/shared/hooks/useMediaQuery';
 
-export const DemoPage: React.FC = () => {
+const LazyDevDialKit = import.meta.env.DEV
+  ? React.lazy(() => import('@/features/demo/DevDialKitTuning'))
+  : null;
+
+interface StageStatusMeta {
+  label: string;
+  dotClass: string;
+  textClass: string;
+  caption: string;
+}
+
+function getStageStatusMeta(
+  stageState: IntegratedStageState,
+  isModelLoading: boolean
+): StageStatusMeta {
+  switch (stageState) {
+    case 'LIVE':
+      return {
+        label: 'Live',
+        dotClass: 'bg-[#A6FA4C] shadow-[0_0_8px_rgba(166,250,76,0.75)]',
+        textClass: 'text-[#A6FA4C]',
+        caption: 'Live eyelid mirroring active · Real telemetry streaming to Elevated',
+      };
+    case 'TRACKING_LOST':
+      return {
+        label: 'Tracking Lost',
+        dotClass: 'bg-amber-300',
+        textClass: 'text-amber-300',
+        caption: 'Face temporarily outside frame · Observation paused automatically',
+      };
+    case 'CAMERA_REQUIRED':
+      return {
+        label: 'Ready',
+        dotClass: 'bg-[#35DFFF]',
+        textClass: 'text-neutral-200',
+        caption: 'Autonomous idle active · Enable camera to mirror your eyes live',
+      };
+    case 'READY':
+      return {
+        label: isModelLoading ? 'Loading Vision' : 'Ready',
+        dotClass: 'bg-[#35DFFF] animate-pulse',
+        textClass: 'text-sky-300',
+        caption: isModelLoading
+          ? 'Initializing on-device MediaPipe face landmark model…'
+          : 'Camera active · Detecting face in frame…',
+      };
+    case 'DEMO':
+      return {
+        label: 'Demo',
+        dotClass: 'bg-neutral-400',
+        textClass: 'text-neutral-300',
+        caption: 'Simulated demonstration mode · Enable camera for live eye tracking',
+      };
+    case 'CONNECTING':
+      return {
+        label: 'Connecting',
+        dotClass: 'bg-sky-300 animate-pulse',
+        textClass: 'text-sky-300',
+        caption: 'Synchronizing shared Blink session room…',
+      };
+    case 'INITIALIZING':
+      return {
+        label: 'Initializing',
+        dotClass: 'bg-neutral-400 animate-pulse',
+        textClass: 'text-neutral-400',
+        caption: 'Preparing Blink companion experience…',
+      };
+    case 'OFFLINE':
+      return {
+        label: 'Offline',
+        dotClass: 'bg-red-400',
+        textClass: 'text-red-400',
+        caption: 'Session disconnected · Reconnect to resume realtime synchronization',
+      };
+    case 'ERROR':
+      return {
+        label: 'Attention',
+        dotClass: 'bg-red-400',
+        textClass: 'text-red-400',
+        caption: 'Open diagnostics to review and recover',
+      };
+  }
+}
+
+export interface DemoPageProps {
+  /** Optional injected realtime service for deterministic automated testing. */
+  realtimeService?: IRealtimeService;
+}
+
+export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService }) => {
   const [searchParams] = useSearchParams();
-  const [showConfig, setShowConfig] = useState(() => searchParams.get('config') === '1');
-  const [configTab, setConfigTab] = useState<'controls' | 'tracking'>(() =>
-    searchParams.get('tab') === 'tracking' ? 'tracking' : 'controls'
-  );
-  const {
-    expression: storeExpr,
-    setExpression,
-    triggerBlink,
-    triggerWink,
-    triggerNudge,
-    materialParams,
-    setMaterialParam,
-    resetMaterialParams,
-  } = useDeviceStore();
+  const prefersReducedMotion = Boolean(useReducedMotion());
+
+  const session = useIntegratedDemoSession({ injectedService: realtimeService });
+  const guideProgress = useExploreBlinkProgress(session);
+
+  // Granular device & tracking selectors (never subscribing to 30fps closure floats)
+  const storeExpr = useDeviceStore((s) => s.expression);
+  const isCameraActive = useTrackingStore((s) => s.isCameraActive);
+  const isModelLoading = useTrackingStore((s) => s.isModelLoading);
+  const isMirroringEnabled = useTrackingStore((s) => s.isMirroringEnabled);
+  const setMirroringEnabled = useTrackingStore((s) => s.setMirroringEnabled);
+
   const exprParam = searchParams.get('expr') as BlinkExpressionType | null;
   const expression = exprParam || storeExpr;
 
+  // Responsive mobile/tablet pane switcher: companion-first on <900px, never unmounts either pane
+  const [compactPane, setCompactPane] = useState<'companion' | 'device'>('companion');
+
+  // Docked non-overlapping side rail (Explore Blink OR System Diagnostics)
+  const isDesktopLayout = useMediaQuery('(min-width: 900px)');
+  const [activeDrawer, setActiveDrawer] = useState<'guide' | 'issues' | null>(null);
+  const guideTriggerRef = useRef<HTMLButtonElement>(null);
+  const issueTriggerRef = useRef<HTMLButtonElement>(null);
+
+  const toggleDrawer = (which: 'guide' | 'issues') => {
+    setActiveDrawer((prev) => (prev === which ? null : which));
+  };
+
+  // Optional dev-only DialKit live tuning when explicitly enabled via ?tune=1 in DEV
+  const showDevDialKit =
+    import.meta.env.DEV && Boolean(LazyDevDialKit) && searchParams.get('tune') === '1';
+
+  useEffect(() => {
+    document.title = 'Blink — Eye-Health Companion';
+  }, []);
+
+  const statusMeta = getStageStatusMeta(session.stageState, isModelLoading);
+  const drawerOpen = activeDrawer !== null;
+
   return (
-    <div className="min-h-screen bg-[#080A0C] flex flex-col text-white">
-      <Navbar />
-
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-center">
-        {/* Header Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-              Blink Integrated Demonstration
-            </h1>
-            <p className="text-xs sm:text-sm text-neutral-400 mt-0.5">
-              Unified presentation mode combining the physical hardware shell with the companion dashboard.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link
-              to="/device"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-[#171A1D] border border-[#272E36] hover:bg-[#22262B] transition-colors"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-[#35DFFF]" />
-              <span>Launch Phone Device</span>
-            </Link>
-            <Link
-              to="/insights"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-[#171A1D] border border-[#272E36] hover:bg-[#22262B] transition-colors"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-[#9AEA3F]" />
-              <span>Launch Phone Companion</span>
-            </Link>
-          </div>
+    <div
+      className="relative h-dvh w-full overflow-hidden bg-[#030405] text-[#F2F4F1] flex flex-col"
+      data-testid="demo-integrated-stage"
+    >
+      {/* Compact Viewport Header (visible < 900px: Tablet & Mobile companion-first navigation) */}
+      <div className="flex min-[900px]:hidden items-center justify-between gap-2 px-4 pt-[max(10px,env(safe-area-inset-top))] pb-2.5 bg-[#0A0B0C]/95 border-b border-white/[0.07] z-30 shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-[17px] font-semibold tracking-[-0.03em] text-white/85 select-none">
+            Blink
+          </span>
+          {/* Reserve horizontal space for the inline compact utility dock on <900px */}
+          <div className="w-[82px] h-8 shrink-0" aria-hidden="true" />
         </div>
 
-        {/* Two-Panel Desktop Integrated Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-          {/* Left Panel: Blink Physical Companion Device (Bezel + Eyes) */}
-          <div className="lg:col-span-7 flex flex-col items-center justify-center p-4 sm:p-8 rounded-3xl bg-[#0E1114] border border-[#272E36]">
-            <div className="w-full flex items-center justify-between mb-4">
-              <span className="text-xs font-mono tracking-wider text-neutral-400 uppercase">
-                HARDWARE EMULATION — LAYER 1-3
-              </span>
-              <span className="text-xs font-medium text-[#35DFFF] bg-[#35DFFF]/10 px-2 py-0.5 rounded border border-[#35DFFF]/20">
-                CYAN EYE ENGINE
-              </span>
-            </div>
-
-            <DeviceShell mode="desktop-integrated" expression={expression} />
-
-            <div className="w-full text-center mt-4 text-xs text-neutral-500">
-              WebGL Eyes Canvas rendered beneath transparent physical bezel asset.
-            </div>
-          </div>
-
-          {/* Right Panel: Blink Companion Insights Dashboard */}
-          <div className="lg:col-span-5 flex justify-center">
-            <InsightsShell className="w-full" />
-          </div>
-        </div>
-      </main>
-
-      {/* Floating Configuration Button & Drawer */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <button
-          onClick={() => setShowConfig(!showConfig)}
-          className="w-12 h-12 rounded-full bg-[#171A1D] border border-[#272E36] text-[#9AEA3F] hover:bg-[#22262B] shadow-2xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
-          title="Demo Configuration"
+        <div
+          role="tablist"
+          aria-label="Switch Blink view"
+          className="inline-flex items-center rounded-full bg-[#141618] border border-white/[0.08] p-0.5"
         >
-          <Sliders className="w-5 h-5" />
-        </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={compactPane === 'companion'}
+            onClick={() => setCompactPane('companion')}
+            data-testid="pane-switch-companion"
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11.5px] font-medium transition-colors cursor-pointer ${
+              compactPane === 'companion'
+                ? 'bg-[#232725] text-[#F2F4F1]'
+                : 'text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <Smartphone className="h-3.5 w-3.5" />
+            <span>Companion</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={compactPane === 'device'}
+            onClick={() => setCompactPane('device')}
+            data-testid="pane-switch-device"
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11.5px] font-medium transition-colors cursor-pointer ${
+              compactPane === 'device'
+                ? 'bg-[#232725] text-[#F2F4F1]'
+                : 'text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <Monitor className="h-3.5 w-3.5" />
+            <span>Device</span>
+          </button>
+        </div>
+      </div>
 
-        {showConfig && (
-          <div className="absolute bottom-16 right-0 w-88 sm:w-96 max-h-[85vh] overflow-y-auto p-4 rounded-2xl bg-[#171A1D] border border-[#272E36] shadow-2xl text-xs space-y-3 animate-in fade-in slide-in-from-bottom-2">
-            <div className="flex items-center justify-between font-semibold text-white">
-              <div className="flex items-center gap-1 bg-[#0E1114] p-1 rounded-xl border border-[#272E36]">
-                <button
-                  onClick={() => setConfigTab('controls')}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                    configTab === 'controls'
-                      ? 'bg-[#35DFFF] text-black font-semibold'
-                      : 'text-neutral-400 hover:text-white'
-                  }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Expressions</span>
-                </button>
-                <button
-                  onClick={() => setConfigTab('tracking')}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                    configTab === 'tracking'
-                      ? 'bg-[#35DFFF] text-black font-semibold'
-                      : 'text-neutral-400 hover:text-white'
-                  }`}
-                >
-                  <Activity className="w-3.5 h-3.5" />
-                  <span>Eye Tracking</span>
-                </button>
+      {/* Main Layout Row: Docked Non-Obstructing Left Rail (when open) + Responsive Split Stage */}
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+        {/* DOCKED SIDEBAR RAIL (Desktop >= 900px): Pushes Device smoothly so eyes are NEVER hidden */}
+        <AnimatePresence initial={false}>
+          {drawerOpen && isDesktopLayout && (
+            <motion.aside
+              key="docked-side-rail"
+              initial={prefersReducedMotion ? { opacity: 0 } : { width: 0, opacity: 0 }}
+              animate={
+                prefersReducedMotion
+                  ? { opacity: 1 }
+                  : { width: 'clamp(296px, 24vw, 356px)', opacity: 1 }
+              }
+              exit={prefersReducedMotion ? { opacity: 0 } : { width: 0, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 360, damping: 34 }}
+              data-testid="demo-docked-rail"
+              className="flex shrink-0 h-full overflow-hidden border-r border-white/[0.08] bg-[#0E1012] z-30"
+            >
+              <div className="h-full w-[clamp(296px,24vw,356px)] shrink-0">
+                {activeDrawer === 'guide' ? (
+                  <ExploreBlinkContent
+                    open={true}
+                    onClose={() => setActiveDrawer(null)}
+                    session={session}
+                    progress={guideProgress}
+                    triggerRef={guideTriggerRef}
+                  />
+                ) : (
+                  <IssueCenterPanel
+                    open={true}
+                    onClose={() => setActiveDrawer(null)}
+                    onAction={session.handleDiagnosticAction}
+                    triggerRef={issueTriggerRef}
+                  />
+                )}
               </div>
-              <button
-                onClick={() => setShowConfig(false)}
-                className="text-neutral-400 hover:text-white p-1"
+            </motion.aside>
+          )}
+        </AnimatePresence>
+
+        {/* PRIMARY SPLIT STAGE (55% / 45% when rail closed; adaptive reflow when rail open) */}
+        <div
+          className={`flex-1 min-w-0 min-h-0 grid grid-cols-1 ${
+            drawerOpen
+              ? 'min-[900px]:grid-cols-[minmax(0,1fr)_minmax(376px,416px)] min-[1200px]:grid-cols-[minmax(0,1fr)_minmax(406px,440px)]'
+              : 'min-[900px]:grid-cols-[minmax(0,1fr)_minmax(384px,430px)] min-[1200px]:grid-cols-[minmax(0,1.22fr)_minmax(420px,1fr)]'
+          }`}
+        >
+          {/* LEFT PANE: Blink Physical Companion Device */}
+          <section
+            aria-label="Blink Hardware Device"
+            data-testid="demo-device-pane"
+            className={`${
+              compactPane === 'device' ? 'flex' : 'hidden'
+            } min-[900px]:flex relative min-w-0 min-h-0 flex-col justify-between bg-[#020203] min-[900px]:border-r border-white/[0.06] overflow-hidden`}
+          >
+            {/* Restrained radial ambient depth behind hardware bezel */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(circle at 50% 47%, rgba(53, 223, 255, 0.035) 0%, rgba(2, 2, 3, 0) 56%)',
+              }}
+            />
+
+            {/* Discreet Desktop Top Bar (never overflows or clips) */}
+            <header className="relative z-20 hidden min-[900px]:flex items-center justify-between gap-2 px-5 xl:px-7 pt-5 pb-2 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0 shrink-0">
+                <span className="text-[22px] xl:text-[24px] font-semibold tracking-[-0.035em] text-white/30 select-none">
+                  Blink
+                </span>
+                <span
+                  data-testid="stage-state-badge"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.035] border border-white/[0.07] px-2.5 py-1 text-[10.5px] font-mono tracking-wide shrink-0"
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dotClass}`} />
+                  <span className={statusMeta.textClass}>{statusMeta.label}</span>
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 min-w-0 shrink-0">
+                <RoomSessionPopover session={session} />
+                <Link
+                  to="/device"
+                  title="Open standalone Blink Device"
+                  aria-label="Open standalone Blink Device display"
+                  className={`${
+                    drawerOpen ? 'hidden xl:inline-flex' : 'inline-flex'
+                  } h-8 items-center justify-center gap-1.5 rounded-full bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.07] px-2.5 text-[11px] font-medium text-neutral-400 hover:text-neutral-200 transition-colors`}
+                >
+                  <Monitor className="h-3.5 w-3.5 shrink-0" />
+                  <span className={drawerOpen ? 'hidden 2xl:inline' : 'hidden xl:inline'}>
+                    Device
+                  </span>
+                </Link>
+                <Link
+                  to="/insights"
+                  title="Open standalone Blink Elevated Companion"
+                  aria-label="Open standalone Blink Elevated companion"
+                  className={`${
+                    drawerOpen ? 'hidden xl:inline-flex' : 'inline-flex'
+                  } h-8 items-center justify-center gap-1.5 rounded-full bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.07] px-2.5 text-[11px] font-medium text-neutral-400 hover:text-neutral-200 transition-colors`}
+                >
+                  <Smartphone className="h-3.5 w-3.5 shrink-0" />
+                  <span className={drawerOpen ? 'hidden 2xl:inline' : 'hidden xl:inline'}>
+                    Companion
+                  </span>
+                </Link>
+              </div>
+            </header>
+
+            {/* Visual Focal Center: Unboxed Blink Device Shell (Layer 1-3) */}
+            <div className="relative z-10 flex-1 min-h-0 flex flex-col items-center justify-center px-5 py-4">
+              <motion.div
+                layout="position"
+                initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                className={`max-w-full transition-[width] duration-300 ${
+                  drawerOpen
+                    ? 'w-[min(360px,46vh,88%)] xl:w-[min(420px,52vh,88%)]'
+                    : 'w-[min(440px,54vh,88vw)] min-[900px]:w-[min(390px,52vh,88%)] min-[1200px]:w-[min(460px,58vh,82%)]'
+                }`}
               >
-                ✕
-              </button>
+                <DeviceShell
+                  key={session.rendererKey}
+                  mode="desktop-integrated"
+                  expression={expression}
+                  frameless={true}
+                  onWebGLStatusChange={session.handleWebGLStatusChange}
+                  onSustainedLowFps={session.handleSustainedLowFps}
+                  onBezelError={session.handleBezelError}
+                  className="bg-black"
+                />
+              </motion.div>
+
+              {/* Centered Floating Control Capsule beneath Device */}
+              <div className="mt-5 flex flex-col items-center gap-2">
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-[#151719]/92 border border-white/[0.09] p-1.5 shadow-[0_14px_36px_rgba(0,0,0,0.68)] backdrop-blur-md">
+                  <button
+                    type="button"
+                    onClick={() => void session.toggleCamera()}
+                    disabled={session.isCameraBusy}
+                    data-testid="stage-camera-toggle"
+                    aria-label={
+                      isCameraActive ? 'Turn camera off' : 'Enable camera for live eye mirroring'
+                    }
+                    aria-pressed={isCameraActive}
+                    className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-[12px] font-medium transition-all duration-200 cursor-pointer disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-[#A6FA4C] ${
+                      isCameraActive
+                        ? 'bg-[#A6FA4C]/16 border border-[#A6FA4C]/45 text-[#A6FA4C] hover:bg-[#A6FA4C]/22'
+                        : 'bg-white/[0.07] border border-white/[0.10] text-[#F2F4F1] hover:bg-white/[0.13]'
+                    }`}
+                  >
+                    {session.isCameraBusy || isModelLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-[#35DFFF]" />
+                    ) : isCameraActive ? (
+                      <Camera className="h-4 w-4" strokeWidth={1.9} />
+                    ) : (
+                      <CameraOff className="h-4 w-4 text-neutral-300" strokeWidth={1.9} />
+                    )}
+                    <span>
+                      {session.isCameraBusy || isModelLoading
+                        ? 'Starting…'
+                        : isCameraActive
+                          ? 'Camera On'
+                          : 'Enable Camera'}
+                    </span>
+                  </button>
+
+                  {isCameraActive ? (
+                    <button
+                      type="button"
+                      onClick={() => setMirroringEnabled(!isMirroringEnabled)}
+                      aria-label={
+                        isMirroringEnabled ? 'Pause eyelid mirroring' : 'Resume eyelid mirroring'
+                      }
+                      aria-pressed={isMirroringEnabled}
+                      data-testid="stage-mirror-toggle"
+                      className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[#A6FA4C] ${
+                        isMirroringEnabled
+                          ? 'bg-[#35DFFF]/12 border-[#35DFFF]/35 text-[#35DFFF] hover:bg-[#35DFFF]/20'
+                          : 'bg-white/[0.04] border-white/[0.08] text-neutral-400 hover:text-white'
+                      }`}
+                      title={
+                        isMirroringEnabled ? 'Eyelid mirroring active' : 'Eyelid mirroring paused'
+                      }
+                    >
+                      {isMirroringEnabled ? (
+                        <Eye className="h-4 w-4" strokeWidth={1.9} />
+                      ) : (
+                        <EyeOff className="h-4 w-4" strokeWidth={1.9} />
+                      )}
+                    </button>
+                  ) : session.stageState === 'OFFLINE' ? (
+                    <button
+                      type="button"
+                      onClick={() => void session.reconnectSession()}
+                      aria-label="Reconnect Blink session"
+                      data-testid="stage-reconnect-btn"
+                      className="inline-flex h-10 items-center gap-1.5 rounded-full bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.08] px-3.5 text-[12px] font-medium text-neutral-200 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[#A6FA4C]"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5 text-[#A6FA4C]" />
+                      <span>Reconnect</span>
+                    </button>
+                  ) : null}
+                </div>
+
+                <p
+                  data-testid="stage-status-caption"
+                  className="text-[11.5px] text-neutral-400 text-center max-w-[340px] px-2 leading-snug"
+                >
+                  {statusMeta.caption}
+                </p>
+              </div>
             </div>
 
-            {configTab === 'tracking' ? (
-              <EyeTrackingDevPanel />
-            ) : (
-              <>
-                <p className="text-neutral-400">
-                  Active Expression: <span className="font-mono text-[#35DFFF] font-bold">{expression}</span>
-                </p>
+            {/* Quiet Bottom Safe Spacer */}
+            <div className="h-6 shrink-0" aria-hidden="true" />
+          </section>
 
-                <div className="space-y-1.5">
-                  <span className="text-[10px] uppercase tracking-wider text-neutral-400 font-semibold">Primary Expressions</span>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {(['idle', 'happy', 'sleepy', 'alert', 'thinking', 'listening'] as BlinkExpressionType[]).map((expr) => (
-                      <button
-                        key={expr}
-                        onClick={() => {
-                          setExpression(expr);
-                          usePersonalityStore.getState().onUserExpression(expr);
-                        }}
-                        className={`py-1.5 px-2 rounded-lg font-medium text-center capitalize transition-colors ${
-                          expression === expr
-                            ? 'bg-[#35DFFF] text-black font-semibold'
-                            : 'bg-[#22262B] text-neutral-300 hover:bg-[#2A3036] hover:text-white'
-                        }`}
-                      >
-                        {expr}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+          {/* RIGHT PANE: Complete Blink Elevated Companion */}
+          <section
+            aria-label="Blink Elevated Companion"
+            data-testid="demo-companion-pane"
+            className={`${
+              compactPane === 'companion' ? 'flex' : 'hidden'
+            } min-[900px]:flex relative min-w-0 min-h-0 flex-col items-center justify-center bg-[#040505] p-0 min-[600px]:p-4 min-[900px]:p-4 xl:p-6 overflow-hidden`}
+          >
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(circle at 50% 18%, rgba(166, 250, 76, 0.05) 0%, rgba(4, 5, 5, 0) 56%)',
+              }}
+            />
 
-                <div className="space-y-1.5 pt-2 border-t border-[#272E36]">
-                  <span className="text-[10px] uppercase tracking-wider text-neutral-400 font-semibold">Choreography & Actions</span>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      onClick={() => triggerBlink()}
-                      className="py-1.5 px-2 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-[#35DFFF] font-medium text-center"
-                    >
-                      Natural Blink
-                    </button>
-                    <button
-                      onClick={() => triggerBlink({ isDouble: true })}
-                      className="py-1.5 px-2 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-[#35DFFF] font-medium text-center"
-                    >
-                      Double Blink
-                    </button>
-                    <button
-                      onClick={() => triggerWink('left')}
-                      className="py-1.5 px-2 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-neutral-300 font-medium text-center"
-                    >
-                      Wink Left
-                    </button>
-                    <button
-                      onClick={() => triggerWink('right')}
-                      className="py-1.5 px-2 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-neutral-300 font-medium text-center"
-                    >
-                      Wink Right
-                    </button>
-                    <button
-                      onClick={() => triggerNudge()}
-                      className="col-span-2 py-1.5 px-2 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-[#FF5449] font-medium text-center"
-                    >
-                      Trigger Nudge
-                    </button>
-                  </div>
-                </div>
-
-                {/* Development Material Tuning Controls (Refinement 03) */}
-                <div className="space-y-2 pt-2 border-t border-[#272E36]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-wider text-neutral-400 font-semibold">
-                      Optical Material Controls
-                    </span>
-                    <button
-                      onClick={() => resetMaterialParams()}
-                      className="text-[10px] text-[#35DFFF] hover:underline"
-                    >
-                      Reset Defaults
-                    </button>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div>
-                      <div className="flex justify-between text-[10px] text-neutral-400 mb-0.5">
-                        <span>Inner Emission</span>
-                        <span className="font-mono text-white">{materialParams.innerEmission.toFixed(2)}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="1.5"
-                        step="0.05"
-                        value={materialParams.innerEmission}
-                        onChange={(e) => setMaterialParam('innerEmission', parseFloat(e.target.value))}
-                        className="w-full h-1 bg-[#22262B] rounded-lg appearance-none cursor-pointer accent-[#35DFFF]"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-[10px] text-neutral-400 mb-0.5">
-                        <span>Rim Diffusion</span>
-                        <span className="font-mono text-white">{materialParams.rimDiffusion.toFixed(2)}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="1.5"
-                        step="0.05"
-                        value={materialParams.rimDiffusion}
-                        onChange={(e) => setMaterialParam('rimDiffusion', parseFloat(e.target.value))}
-                        className="w-full h-1 bg-[#22262B] rounded-lg appearance-none cursor-pointer accent-[#35DFFF]"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-[10px] text-neutral-400 mb-0.5">
-                        <span>Outer Halo</span>
-                        <span className="font-mono text-white">{materialParams.outerHalo.toFixed(2)}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0.4"
-                        max="1.6"
-                        step="0.05"
-                        value={materialParams.outerHalo}
-                        onChange={(e) => setMaterialParam('outerHalo', parseFloat(e.target.value))}
-                        className="w-full h-1 bg-[#22262B] rounded-lg appearance-none cursor-pointer accent-[#35DFFF]"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-[10px] text-neutral-400 mb-0.5">
-                        <span>Texture Contrast</span>
-                        <span className="font-mono text-white">{materialParams.textureContrast.toFixed(2)}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="1.5"
-                        step="0.05"
-                        value={materialParams.textureContrast}
-                        onChange={(e) => setMaterialParam('textureContrast', parseFloat(e.target.value))}
-                        className="w-full h-1 bg-[#22262B] rounded-lg appearance-none cursor-pointer accent-[#35DFFF]"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-[10px] text-neutral-400 mb-0.5">
-                        <span>Substrate Depth</span>
-                        <span className="font-mono text-white">{materialParams.depthVariation.toFixed(2)}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="1.5"
-                        step="0.05"
-                        value={materialParams.depthVariation}
-                        onChange={(e) => setMaterialParam('depthVariation', parseFloat(e.target.value))}
-                        className="w-full h-1 bg-[#22262B] rounded-lg appearance-none cursor-pointer accent-[#35DFFF]"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-[#272E36]">
-                  <button
-                    onClick={() => {
-                      setExpression('idle');
-                      resetMaterialParams();
-                      window.location.reload();
-                    }}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-[#22262B] hover:bg-[#2A3036] text-white"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Reset Demo State
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+            <div className="relative z-10 flex h-full w-full items-center justify-center">
+              <InsightsApp
+                embedded={true}
+                manageConnection={false}
+                realtimeService={session.realtimeService}
+                roomCode={session.roomCode}
+                onReconnectOverride={session.reconnectSession}
+                onSwitchRoomOverride={session.switchRoom}
+                onLiveStateChange={session.handleElevatedLiveChange}
+              />
+            </div>
+          </section>
+        </div>
       </div>
+
+      {/* Discreet Utility Dock: Bottom-left on desktop (shifts cleanly beside docked rail when open), inline top-left on <900px */}
+      <div
+        className={`fixed top-[max(7px,env(safe-area-inset-top))] left-[74px] min-[900px]:top-auto min-[900px]:bottom-[max(16px,env(safe-area-inset-bottom))] z-50 flex flex-row min-[900px]:flex-col items-center gap-1 rounded-full min-[900px]:rounded-2xl bg-[#131517]/92 border border-white/[0.09] px-1 py-0.5 min-[900px]:p-1.5 shadow-[0_14px_38px_rgba(0,0,0,0.75)] backdrop-blur-lg transition-[left] duration-300 ${
+          drawerOpen
+            ? 'min-[900px]:left-[calc(clamp(296px,24vw,356px)+12px)]'
+            : 'min-[900px]:left-3'
+        }`}
+        aria-label="Blink guidance and system diagnostics"
+      >
+        <ExploreBlinkTrigger
+          open={activeDrawer === 'guide'}
+          onToggle={() => toggleDrawer('guide')}
+          buttonRef={guideTriggerRef}
+        />
+        <div
+          className="h-4 w-px min-[900px]:h-px min-[900px]:w-6 bg-white/[0.08]"
+          aria-hidden="true"
+        />
+        <IssueCenterTrigger
+          open={activeDrawer === 'issues'}
+          onToggle={() => toggleDrawer('issues')}
+          buttonRef={issueTriggerRef}
+        />
+      </div>
+
+      {/* COMPACT VIEWPORT (<900px) NON-OBSTRUCTING BOTTOM HALF-SHEET */}
+      <AnimatePresence>
+        {drawerOpen && !isDesktopLayout && (
+          <motion.div
+            key="compact-bottom-drawer"
+            initial={prefersReducedMotion ? { opacity: 0 } : { y: '100%', opacity: 0 }}
+            animate={prefersReducedMotion ? { opacity: 1 } : { y: 0, opacity: 1 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { y: '100%', opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 34 }}
+            className="fixed inset-x-0 bottom-0 z-[65] h-[min(52dvh,460px)] overflow-hidden rounded-t-3xl border-t border-white/[0.12] bg-[#0E1012] shadow-[0_-24px_64px_rgba(0,0,0,0.88)]"
+          >
+            {activeDrawer === 'guide' ? (
+              <ExploreBlinkContent
+                open={true}
+                onClose={() => setActiveDrawer(null)}
+                session={session}
+                progress={guideProgress}
+                triggerRef={guideTriggerRef}
+              />
+            ) : (
+              <IssueCenterPanel
+                open={true}
+                onClose={() => setActiveDrawer(null)}
+                onAction={session.handleDiagnosticAction}
+                triggerRef={issueTriggerRef}
+              />
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Dev-Only DialKit Live Tuning Harness (never loaded or exposed in production) */}
+      {showDevDialKit && LazyDevDialKit && (
+        <Suspense fallback={null}>
+          <LazyDevDialKit />
+        </Suspense>
+      )}
     </div>
   );
 };

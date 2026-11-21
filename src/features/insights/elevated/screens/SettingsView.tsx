@@ -8,6 +8,9 @@ import {
   Power,
   LogOut,
   Eye,
+  Check,
+  X,
+  Link2,
 } from 'lucide-react';
 import { DeskNodeVisual } from '../components/DeskNodeVisual';
 import { PortalSheet } from '../components/PortalSheet';
@@ -76,7 +79,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [voiceIdx, setVoiceIdx] = useState(0);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'disconnect' | 'signout' | null>(null);
+  const [editingRoom, setEditingRoom] = useState(false);
+  const [roomDraft, setRoomDraft] = useState(roomCode);
   const calibrationTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setRoomDraft(roomCode);
+  }, [roomCode]);
 
   useEffect(() => {
     return () => {
@@ -153,17 +162,64 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               Room: {roomCode} · Mode: {mode} {isStale ? '(Stale)' : ''} · Status: {monitoringMode}
             </p>
             {onSwitchRoom && (
-              <div className="mt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = prompt('Enter Room Code', roomCode);
-                    if (next && next.trim()) onSwitchRoom(next.trim());
-                  }}
-                  className="press-tactile text-[11px] font-mono text-[#A6FA4C] hover:underline"
-                >
-                  [Change Room]
-                </button>
+              <div className="mt-2.5 w-full max-w-[260px]">
+                {editingRoom ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const cleaned = roomDraft.trim().toUpperCase();
+                      if (cleaned) {
+                        onSwitchRoom(cleaned);
+                        onShowToast(`Switching to room ${cleaned}`);
+                      }
+                      setEditingRoom(false);
+                    }}
+                    className="flex items-center gap-1.5"
+                  >
+                    <input
+                      type="text"
+                      value={roomDraft}
+                      onChange={(e) => setRoomDraft(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setRoomDraft(roomCode);
+                          setEditingRoom(false);
+                        }
+                      }}
+                      aria-label="Room code"
+                      placeholder="BLINK-DEMO"
+                      autoFocus
+                      className="h-[32px] min-w-0 flex-1 rounded-full surface-well px-3 font-mono-num text-[11px] uppercase tracking-[0.04em] text-[#F2F4F1] focus-visible:outline-2 focus-visible:outline-[#A6FA4C]"
+                    />
+                    <button
+                      type="submit"
+                      aria-label="Join room"
+                      className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-full bg-[#A6FA4C]/15 border border-[#A6FA4C]/35 text-[#A6FA4C] cursor-pointer"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRoomDraft(roomCode);
+                        setEditingRoom(false);
+                      }}
+                      aria-label="Cancel room change"
+                      className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-full surface-tactile text-[#98A09A] cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditingRoom(true)}
+                    className="press-tactile inline-flex items-center gap-1.5 rounded-full bg-white/[0.04] border border-white/[0.06] px-3 py-1 text-[11px] font-mono-num text-[#A6FA4C] hover:border-[#A6FA4C]/35 cursor-pointer"
+                  >
+                    <Link2 className="h-3 w-3" />
+                    <span>Change Room</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -203,9 +259,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <section className="rounded-[24px] surface-instrument p-4 space-y-4">
         <div>
           <div className="flex items-center justify-between">
-            <span className="text-[13.5px] font-medium text-[#F2F4F1]">
-              Tracking sensitivity
-            </span>
+            <div>
+              <span className="text-[13.5px] font-medium text-[#F2F4F1]">
+                Tracking sensitivity
+              </span>
+              <span className="ml-2 rounded-full bg-white/[0.04] px-2 py-0.5 font-mono-num text-[9.5px] text-[#7F8782]">
+                Local preview
+              </span>
+            </div>
             <span className="font-mono-num text-[11px] text-[#A6FA4C]">{sensitivity}</span>
           </div>
           <div className="mt-2.5 grid grid-cols-3 rounded-full surface-well p-[3px]">

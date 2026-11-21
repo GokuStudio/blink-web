@@ -19,6 +19,13 @@ export interface UseElevatedLiveTelemetryOptions {
   service?: IRealtimeService;
   roomCode?: string;
   staleTimeoutMs?: number;
+  /**
+   * When false (e.g. inside integrated /demo), an external coordinator owns
+   * connect()/disconnect() on the shared IRealtimeService instance.
+   */
+  manageConnection?: boolean;
+  onReconnectOverride?: () => Promise<void>;
+  onSwitchRoomOverride?: (newRoomCode: string) => Promise<void>;
 }
 
 export interface ElevatedLiveTelemetryState {
@@ -88,6 +95,11 @@ export function useElevatedLiveTelemetry(
 
   const lastTelemetryTimeRef = useRef<number | null>(null);
   const activeServiceRef = useRef<IRealtimeService | null>(null);
+  const manageConnection = options?.manageConnection !== false;
+  const onReconnectOverrideRef = useRef(options?.onReconnectOverride);
+  onReconnectOverrideRef.current = options?.onReconnectOverride;
+  const onSwitchRoomOverrideRef = useRef(options?.onSwitchRoomOverride);
+  onSwitchRoomOverrideRef.current = options?.onSwitchRoomOverride;
 
   // Connect & subscribe lifecycle
   useEffect(() => {
@@ -96,9 +108,67 @@ export function useElevatedLiveTelemetry(
     let unsubState: (() => void) | null = null;
     let unsubPresence: (() => void) | null = null;
     let unsubStatus: (() => void) | null = null;
+    let subscribed = false;
+
+    const detachDataSubscriptions = () => {
+      if (unsubTelemetry) {
+        unsubTelemetry();
+        unsubTelemetry = null;
+      }
+      if (unsubState) {
+        unsubState();
+        unsubState = null;
+      }
+      if (unsubPresence) {
+        unsubPresence();
+        unsubPresence = null;
+      }
+      subscribed = false;
+    };
+
+    const attachDataSubscriptions = (service: IRealtimeService) => {
+      if (isCancelled || subscribed) return;
+      subscribed = true;
+
+      unsubPresence = service.subscribeToPresence((presenceMap: Record<string, UserPresence>) => {
+        if (isCancelled) return;
+        let isDeviceOnline = false;
+        if (presenceMap) {
+          for (const uid of Object.keys(presenceMap)) {
+            const member = presenceMap[uid];
+            if (
+              member.role === 'blink-device' ||
+              member.role === 'integrated-demo'
+            ) {
+              const conns = member.connections || {};
+              if (Object.keys(conns).length > 0) {
+                isDeviceOnline = true;
+                break;
+              }
+            }
+          }
+        }
+        setDeviceConnected(isDeviceOnline);
+      });
+
+      unsubTelemetry = service.subscribeToTelemetry((telem: DeviceTelemetry) => {
+        if (isCancelled || !telem) return;
+        const now = Date.now();
+        const isFresh = now - telem.timestamp <= staleTimeoutMs;
+
+        lastTelemetryTimeRef.current = telem.timestamp;
+        setLastSyncTimestamp(telem.timestamp);
+        setIsStale(!isFresh);
+        setTelemetry(telem);
+      });
+
+      unsubState = service.subscribeToDeviceState((state: DeviceState) => {
+        if (isCancelled || !state) return;
+        setDeviceState(state);
+      });
+    };
 
     setError(null);
-    setConnectionStatus('connecting');
 
     // 1. Resolve or instantiate Realtime Service
     let service: IRealtimeService;
@@ -124,6 +194,37 @@ export function useElevatedLiveTelemetry(
 
     activeServiceRef.current = service;
 
+    if (!manageConnection) {
+      // Shared transport owned externally (e.g. /demo coordinator):
+      // Never invoke duplicate connect() or tear down the shared room on unmount.
+      const currentStatus = service.getConnectionStatus();
+      setConnectionStatus(currentStatus);
+      if (currentStatus === 'connected') {
+        attachDataSubscriptions(service);
+      }
+
+      unsubStatus = service.onConnectionStatusChange((status) => {
+        if (isCancelled) return;
+        setConnectionStatus(status);
+        if (status === 'connected') {
+          setError(null);
+          attachDataSubscriptions(service);
+        } else if (status === 'disconnected' || status === 'failed') {
+          detachDataSubscriptions();
+          setDeviceConnected(false);
+        }
+      });
+
+      return () => {
+        isCancelled = true;
+        detachDataSubscriptions();
+        if (unsubStatus) unsubStatus();
+        activeServiceRef.current = null;
+      };
+    }
+
+    setConnectionStatus('connecting');
+
     // 2. Track connection status
     unsubStatus = service.onConnectionStatusChange((status) => {
       if (!isCancelled) {
@@ -136,46 +237,7 @@ export function useElevatedLiveTelemetry(
       .connect(roomCode)
       .then((connected) => {
         if (isCancelled || !connected) return;
-
-        // 4. Subscribe to presence
-        unsubPresence = service.subscribeToPresence((presenceMap: Record<string, UserPresence>) => {
-          if (isCancelled) return;
-          let isDeviceOnline = false;
-          if (presenceMap) {
-            for (const uid of Object.keys(presenceMap)) {
-              const member = presenceMap[uid];
-              if (
-                member.role === 'blink-device' ||
-                member.role === 'integrated-demo'
-              ) {
-                const conns = member.connections || {};
-                if (Object.keys(conns).length > 0) {
-                  isDeviceOnline = true;
-                  break;
-                }
-              }
-            }
-          }
-          setDeviceConnected(isDeviceOnline);
-        });
-
-        // 5. Subscribe to telemetry
-        unsubTelemetry = service.subscribeToTelemetry((telem: DeviceTelemetry) => {
-          if (isCancelled || !telem) return;
-          const now = Date.now();
-          const isFresh = now - telem.timestamp <= staleTimeoutMs;
-
-          lastTelemetryTimeRef.current = telem.timestamp;
-          setLastSyncTimestamp(telem.timestamp);
-          setIsStale(!isFresh);
-          setTelemetry(telem);
-        });
-
-        // 6. Subscribe to device state
-        unsubState = service.subscribeToDeviceState((state: DeviceState) => {
-          if (isCancelled || !state) return;
-          setDeviceState(state);
-        });
+        attachDataSubscriptions(service);
       })
       .catch((err) => {
         if (!isCancelled) {
@@ -189,14 +251,12 @@ export function useElevatedLiveTelemetry(
     // Cleanup on unmount or roomCode change
     return () => {
       isCancelled = true;
-      if (unsubTelemetry) unsubTelemetry();
-      if (unsubState) unsubState();
-      if (unsubPresence) unsubPresence();
+      detachDataSubscriptions();
       if (unsubStatus) unsubStatus();
       service.disconnect().catch(() => {});
       activeServiceRef.current = null;
     };
-  }, [roomCode, auth.user, options?.service, staleTimeoutMs]);
+  }, [roomCode, auth.user, options?.service, staleTimeoutMs, manageConnection]);
 
   // Staleness periodic check (every 500ms)
   useEffect(() => {
@@ -269,6 +329,10 @@ export function useElevatedLiveTelemetry(
   const brightness = deviceState?.brightness ?? 1.0;
 
   const reconnect = useCallback(async () => {
+    if (onReconnectOverrideRef.current) {
+      await onReconnectOverrideRef.current();
+      return;
+    }
     if (activeServiceRef.current) {
       setError(null);
       setConnectionStatus('connecting');
@@ -283,10 +347,16 @@ export function useElevatedLiveTelemetry(
 
   const switchRoom = useCallback(
     async (newRoomCode: string) => {
+      const normalized = newRoomCode.toUpperCase().trim();
+      if (!normalized) return;
+      if (onSwitchRoomOverrideRef.current) {
+        await onSwitchRoomOverrideRef.current(normalized);
+        return;
+      }
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          next.set('room', newRoomCode.toUpperCase().trim());
+          next.set('room', normalized);
           return next;
         },
         { replace: true }

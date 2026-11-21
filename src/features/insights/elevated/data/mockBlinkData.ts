@@ -100,7 +100,7 @@ export function deriveBlinkZone(
   paused: boolean,
   connected: boolean,
   baseline = 17,
-  options?: { isFaceDetected?: boolean; isValidZero?: boolean }
+  options?: { isFaceDetected?: boolean; isValidZero?: boolean; cameraStandby?: boolean }
 ): DerivedBlinkZone {
   if (!connected) {
     return {
@@ -119,6 +119,23 @@ export function deriveBlinkZone(
 
   const isFaceDetected = options?.isFaceDetected !== false;
   const isValidZero = options?.isValidZero === true;
+  const cameraStandby = options?.cameraStandby === true;
+
+  if (cameraStandby) {
+    return {
+      id: 'paused',
+      shortLabel: 'Standby',
+      subLabel: 'Camera standby',
+      headline: 'Ready to mirror your eyes.',
+      guidance:
+        'Enable the camera on Blink Device to stream live blink telemetry, or explore simulated cadence.',
+      ctaLabel: 'Explore 20s Rest',
+      ctaSecondary: 'Settings',
+      accentHex: '#7CE8FF',
+      ambientRgb: '124, 232, 255',
+      segmentTint: 'rgba(124, 232, 255, 0.22)',
+    };
+  }
 
   if (paused || !isFaceDetected) {
     return {

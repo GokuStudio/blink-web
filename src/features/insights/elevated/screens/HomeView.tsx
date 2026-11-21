@@ -90,15 +90,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const effectiveTotalBlinks =
     propTotalBlinks !== undefined ? propTotalBlinks : localTotalBlinks;
 
-  const isInactive =
-    !connected || paused || (blinkRate <= 0 && !isValidZero) || mode === 'OFFLINE';
+  const isCameraStandby = connected && mode === 'DEMO' && !isFaceDetected;
+
+  const isDisconnectedOrPaused =
+    !connected || paused || !isFaceDetected || mode === 'OFFLINE';
+  const isEstablishingBaseline =
+    !isDisconnectedOrPaused && blinkRate <= 0 && !isValidZero;
+  const isInactive = isDisconnectedOrPaused || isEstablishingBaseline;
 
   const zone = deriveBlinkZone(
     blinkRate,
     paused,
     connected && mode !== 'OFFLINE',
     BASELINE_RATE,
-    { isFaceDetected, isValidZero }
+    { isFaceDetected, isValidZero, cameraStandby: isCameraStandby }
   );
 
   useEffect(() => {
@@ -128,17 +133,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
       ? isStale && lastSyncTimestamp
         ? 'Telemetry stale (>3.5s)'
         : 'Desk Node 01 offline'
-      : !isFaceDetected
-        ? 'Face not detected · Tracking paused'
-        : paused
-          ? 'Optical observation paused'
-          : isValidZero
-            ? 'Stare detected (0 BPM) · Fatigue alert'
-            : deltaDiff === 0
-              ? `Matched with your usual ${BASELINE_RATE}`
-              : deltaDiff < 0
-                ? `${Math.abs(deltaDiff)} below your usual ${BASELINE_RATE}`
-                : `${deltaDiff} above your usual ${BASELINE_RATE}`;
+      : isCameraStandby
+        ? 'Camera standby · Ready for live tracking'
+        : !isFaceDetected
+          ? 'Face not detected · Tracking paused'
+          : paused
+            ? 'Optical observation paused'
+            : isValidZero
+              ? 'Stare detected (0 BPM) · Fatigue alert'
+              : isEstablishingBaseline
+                ? 'Observing · Acquiring 30s baseline'
+                : deltaDiff === 0
+                  ? `Matched with your usual ${BASELINE_RATE}`
+                  : deltaDiff < 0
+                    ? `${Math.abs(deltaDiff)} below your usual ${BASELINE_RATE}`
+                    : `${deltaDiff} above your usual ${BASELINE_RATE}`;
 
   // Derived coherent telemetry values for the 6-card grid
   const effectiveAvgRate =
@@ -148,11 +157,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
         ? 0
         : Number(((14.8 * 3 + blinkRate) / 4).toFixed(1));
 
+  // Do not fabricate closure duration or incomplete blink counts during LIVE sessions
   const closureMs =
-    isInactive && !isValidZero
+    mode === 'LIVE' || (isInactive && !isValidZero)
       ? null
       : Math.round(165 + Math.max(0, 20 - blinkRate) * 2.5);
-  const incompleteBlinks = isInactive && !isValidZero ? 0 : blinkRate <= 14 ? 4 : 2;
+  const incompleteBlinks =
+    mode === 'LIVE'
+      ? null
+      : isInactive && !isValidZero
+        ? 0
+        : blinkRate <= 14
+          ? 4
+          : 2;
 
   const handlePrimaryAction = () => {
     if (!connected) {
@@ -201,9 +218,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <span className="text-[#626A65]">·</span>
           <span
             className="transition-colors duration-300"
-            style={{ color: isInactive ? '#98A09A' : zone.accentHex }}
+            style={{ color: isCameraStandby ? '#7CE8FF' : isInactive ? '#98A09A' : zone.accentHex }}
           >
-            {connected ? (paused ? 'Paused' : 'Active') : 'Offline'}
+            {connected ? (isCameraStandby ? 'Ready' : paused ? 'Paused' : 'Active') : 'Offline'}
           </span>
           <ChevronDown
             className={`h-3.5 w-3.5 text-[#7F8782] transition-transform duration-200 ${
@@ -562,15 +579,34 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="text-[12px] font-medium text-[#98A09A]">
               Monitoring Time
             </div>
-            <div className="font-mono-num mt-2 text-[22px] font-semibold leading-none tracking-[-0.02em] text-[#F3F5F2]">
-              {isInactive && !isValidZero ? '00:00' : formatClock(effectiveSessionSeconds)}
+            <div
+              data-testid="metric-monitoring-time"
+              className="font-mono-num mt-2 text-[22px] font-semibold leading-none tracking-[-0.02em] text-[#F3F5F2]"
+            >
+              {isDisconnectedOrPaused && !isValidZero
+                ? '00:00'
+                : formatClock(effectiveSessionSeconds)}
             </div>
             <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#7F8782]">
               <span
                 className="h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: isInactive && !isValidZero ? '#6D7670' : zone.accentHex }}
+                style={{
+                  backgroundColor: isDisconnectedOrPaused
+                    ? '#6D7670'
+                    : isEstablishingBaseline
+                      ? '#A6FA4C'
+                      : zone.accentHex,
+                }}
               />
-              <span>{isInactive && !isValidZero ? (isMonitoring ? 'Paused' : 'Idle') : 'Active'}</span>
+              <span>
+                {isDisconnectedOrPaused
+                  ? isMonitoring
+                    ? 'Paused'
+                    : 'Idle'
+                  : isEstablishingBaseline
+                    ? 'Observing'
+                    : 'Active'}
+              </span>
             </div>
           </div>
 
@@ -579,8 +615,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="text-[12px] font-medium text-[#98A09A]">
               Total Blinks
             </div>
-            <div className="font-mono-num mt-2 text-[22px] font-semibold leading-none tracking-[-0.02em] text-[#F3F5F2]">
-              {isInactive && !isValidZero ? '0' : effectiveTotalBlinks.toLocaleString()}
+            <div
+              data-testid="metric-total-blinks"
+              className="font-mono-num mt-2 text-[22px] font-semibold leading-none tracking-[-0.02em] text-[#F3F5F2]"
+            >
+              {isDisconnectedOrPaused && !isValidZero
+                ? '0'
+                : effectiveTotalBlinks.toLocaleString()}
             </div>
             <div className="mt-2 text-[11px] text-[#7F8782]">
               Current session
@@ -593,12 +634,24 @@ export const HomeView: React.FC<HomeViewProps> = ({
               Blinks / Min
             </div>
             <div
+              data-testid="metric-blink-rate"
               className="font-mono-num mt-2 text-[22px] font-semibold leading-none tracking-[-0.02em] transition-colors duration-300"
-              style={{ color: isInactive && !isValidZero ? '#8C938E' : zone.accentHex }}
+              style={{
+                color:
+                  isDisconnectedOrPaused || isEstablishingBaseline
+                    ? '#8C938E'
+                    : zone.accentHex,
+              }}
             >
-              {isInactive && !isValidZero ? '0' : blinkRate}
+              {isEstablishingBaseline
+                ? '—'
+                : isDisconnectedOrPaused && !isValidZero
+                  ? '0'
+                  : blinkRate}
             </div>
-            <div className="mt-2 text-[11px] text-[#7F8782]">Rolling 60s</div>
+            <div className="mt-2 text-[11px] text-[#7F8782]">
+              {isEstablishingBaseline ? 'Acquiring 30s' : 'Rolling 60s'}
+            </div>
           </div>
 
           {/* 4. Average Rate */}
@@ -607,10 +660,21 @@ export const HomeView: React.FC<HomeViewProps> = ({
               Average Rate
             </div>
             <div className="mt-2 flex items-baseline gap-1">
-              <span className="font-mono-num text-[22px] font-semibold leading-none tracking-[-0.02em] text-[#F3F5F2]">
-                {effectiveAvgRate > 0 ? effectiveAvgRate.toFixed(1) : (isInactive && !isValidZero ? '0' : '0.0')}
+              <span
+                data-testid="metric-avg-rate"
+                className="font-mono-num text-[22px] font-semibold leading-none tracking-[-0.02em] text-[#F3F5F2]"
+              >
+                {effectiveAvgRate > 0
+                  ? effectiveAvgRate.toFixed(1)
+                  : isEstablishingBaseline
+                    ? '—'
+                    : isDisconnectedOrPaused && !isValidZero
+                      ? '0'
+                      : '0.0'}
               </span>
-              <span className="text-[11px] text-[#7F8782]">/min</span>
+              {!isEstablishingBaseline && (
+                <span className="text-[11px] text-[#7F8782]">/min</span>
+              )}
             </div>
             <div className="mt-2 text-[11px] text-[#7F8782]">
               Target ~{BASELINE_RATE}/min
@@ -631,7 +695,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               )}
             </div>
             <div className="mt-2 text-[11px] text-[#7F8782]">
-              Avg: {closureMs !== null ? '190 ms' : '—'}
+              {mode === 'LIVE' ? 'Camera stream' : `Avg: ${closureMs !== null ? '190 ms' : '—'}`}
             </div>
           </div>
 
@@ -645,7 +709,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               Incomplete Blinks
             </div>
             <div className="font-mono-num mt-2 text-[22px] font-semibold leading-none tracking-[-0.02em] text-[#F3F5F2]">
-              {incompleteBlinks}
+              {incompleteBlinks !== null ? incompleteBlinks : '—'}
             </div>
             <div className="mt-2 inline-flex items-center gap-1 text-[11.5px] font-medium text-[#A6FA4C]">
               <span>Live Monitor</span>

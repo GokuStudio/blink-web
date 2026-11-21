@@ -7,7 +7,7 @@ import { InsightsPage } from '@/pages/InsightsPage';
 import { JoinPage } from '@/pages/JoinPage';
 
 describe('Blink Routes Smoke Tests', () => {
-  it('renders DemoPage with integrated two-panel shell', () => {
+  it('renders DemoPage with integrated Device and Elevated companion shell', () => {
     render(
       <MemoryRouter initialEntries={['/demo']}>
         <Routes>
@@ -16,9 +16,9 @@ describe('Blink Routes Smoke Tests', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText(/Blink Integrated Demonstration/i)).toBeInTheDocument();
+    expect(screen.getByTestId('demo-integrated-stage')).toBeInTheDocument();
     expect(screen.getByTestId('device-shell-desktop')).toBeInTheDocument();
-    expect(screen.getByTestId('insights-shell')).toBeInTheDocument();
+    expect(screen.getByTestId('insights-elevated-app')).toBeInTheDocument();
   });
 
   it('renders DevicePage in standalone mode without bezel', () => {

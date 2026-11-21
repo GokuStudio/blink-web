@@ -10,6 +10,7 @@ interface BottomDockProps {
   assistantPhase: AssistantPhase;
   onOrbHoldStart: () => void;
   onOrbHoldEnd: () => void;
+  embedded?: boolean;
 }
 
 export const BottomDock: React.FC<BottomDockProps> = ({
@@ -18,6 +19,7 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   assistantPhase,
   onOrbHoldStart,
   onOrbHoldEnd,
+  embedded = false,
 }) => {
   const navRef = useRef<HTMLElement | null>(null);
   const navItems: Array<{
@@ -31,7 +33,13 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   ];
 
   return (
-    <div className="pointer-events-none fixed bottom-0 left-1/2 z-40 w-full max-w-[390px] -translate-x-1/2 px-4 pb-[calc(14px+env(safe-area-inset-bottom))] pt-6 bg-gradient-to-t from-[#0D0F0E] via-[#0D0F0E]/92 to-transparent">
+    <div
+      className={
+        embedded
+          ? 'pointer-events-none absolute bottom-0 inset-x-0 z-40 w-full px-4 pb-3.5 pt-6 bg-gradient-to-t from-[#0D0F0E] via-[#0D0F0E]/92 to-transparent'
+          : 'pointer-events-none fixed bottom-0 left-1/2 z-40 w-full max-w-[390px] -translate-x-1/2 px-4 pb-[calc(14px+env(safe-area-inset-bottom))] pt-6 bg-gradient-to-t from-[#0D0F0E] via-[#0D0F0E]/92 to-transparent'
+      }
+    >
       <div className="pointer-events-auto flex items-center gap-3">
         <nav
           ref={navRef}
