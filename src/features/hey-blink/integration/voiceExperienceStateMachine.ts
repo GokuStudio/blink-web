@@ -238,7 +238,14 @@ export function classifyVoiceDiagnosticCode(
   if (msg.includes('unsupported') || msg.includes('mediadevices') || msg.includes('audioworklet')) {
     return 'VOICE_BROWSER_UNSUPPORTED';
   }
-  if (msg.includes('rate limit') || msg.includes('quota') || msg.includes('429')) {
+  if (
+    msg.includes('rate limit') ||
+    msg.includes('quota') ||
+    msg.includes('429') ||
+    msg.includes('prepayment') ||
+    msg.includes('credits are depleted') ||
+    msg.includes('billing')
+  ) {
     return 'VOICE_QUOTA_EXCEEDED';
   }
   if (

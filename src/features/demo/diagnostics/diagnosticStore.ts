@@ -317,11 +317,13 @@ export const DIAGNOSTIC_CATALOG: Record<DiagnosticCode, DiagnosticTemplate> = {
     code: 'VOICE_QUOTA_EXCEEDED',
     category: 'voice',
     severity: 'WARNING',
-    title: 'Voice rate limit reached',
-    explanation: 'Too many voice sessions were requested in a short window.',
-    recommendedAction: 'Wait a moment before starting another conversation.',
-    actionType: 'retry_voice',
-    actionLabel: 'Try again',
+    title: 'Voice billing or rate limit reached',
+    explanation:
+      'Gemini Live rejected the session due to depleted billing credits or rate limits on the API key project.',
+    recommendedAction:
+      'Check billing/credits in AI Studio for the API key project, or use Preview mode.',
+    actionType: 'enable_voice_preview',
+    actionLabel: 'Try preview mode',
   },
   VOICE_TRANSPORT_DISCONNECTED: {
     code: 'VOICE_TRANSPORT_DISCONNECTED',

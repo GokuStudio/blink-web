@@ -465,7 +465,7 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
         {experienceState === 'VOICE_ERROR' && errorMessage && (
           <p
             data-testid="voice-bubble-error-text"
-            className="max-w-[230px] text-[10.5px] leading-snug text-red-300/90"
+            className="max-w-[210px] line-clamp-2 text-[10.5px] leading-snug text-red-300/90"
           >
             {errorMessage}
           </p>
