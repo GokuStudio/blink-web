@@ -1,0 +1,339 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { VoiceBeam, type VoiceBeamMotion } from 'voice-glow';
+import { useMediaQuery } from '@/shared/hooks/useMediaQuery';
+import { cn } from '@/shared/utils/cn';
+import type {
+  VoiceAudioLevels,
+  VoiceSessionState,
+} from '../services/voice-session.interface';
+import {
+  computeResponsiveBeamScale,
+  resolveVisualPreset,
+  type VoiceGlowTuning,
+} from './visual-presets';
+
+export interface BlinkVoiceGlowProps {
+  /** Current voice session lifecycle state */
+  state: VoiceSessionState;
+  /** Whether user microphone input is muted */
+  isMuted: boolean;
+  /** High-frequency audio levels ref (sampled at 60 FPS without React re-renders) */
+  audioLevelsRef: React.MutableRefObject<VoiceAudioLevels>;
+  /** Optional live DialKit customization tuning */
+  tuning?: Partial<VoiceGlowTuning>;
+  /** Foreground interactive overlay (status + minimal controls) */
+  children?: React.ReactNode;
+  className?: string;
+}
+
+interface MotionKinematicState {
+  gather: number;
+  offset: number;
+  stretch: number;
+  heldLevel: number;
+  lastSampleMs: number;
+  stateEnteredMs: number;
+  lastState: VoiceSessionState;
+}
+
+function lerpTowards(current: number, target: number, dtSec: number, speed: number): number {
+  const alpha = 1 - Math.exp(-Math.max(0, dtSec) * speed);
+  return current + (target - current) * alpha;
+}
+
+/**
+ * BlinkVoiceGlow — Fullscreen Voice Presence Visualizer
+ *
+ * Composes `voice-glow`'s `VoiceBeam` within a pitch-black fullscreen atmospheric
+ * canvas with a subtle specular bottom horizon hairline and live DialKit tuning.
+ *
+ * Zero React re-renders per animation frame.
+ */
+export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
+  state,
+  isMuted,
+  audioLevelsRef,
+  tuning,
+  children,
+  className,
+}) => {
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+
+  const [viewportScale, setViewportScale] = useState<number>(() => {
+    if (typeof window === 'undefined') return 1.15;
+    return computeResponsiveBeamScale(window.innerWidth, window.innerHeight);
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportScale(computeResponsiveBeamScale(window.innerWidth, window.innerHeight));
+    };
+    window.addEventListener('resize', handleResize, { passive: true });
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const preset = useMemo(
+    () => resolveVisualPreset(state, isMuted, tuning),
+    [state, isMuted, tuning]
+  );
+
+  const effectiveScale = viewportScale * (tuning?.beamScale ?? 1);
+
+  // Refs synced on state changes so rAF getters never need to recreate closures
+  const stateRef = useRef<VoiceSessionState>(state);
+  const isMutedRef = useRef<boolean>(isMuted);
+  const reducedMotionRef = useRef<boolean>(prefersReducedMotion);
+  const presetRef = useRef(preset);
+
+  stateRef.current = state;
+  isMutedRef.current = isMuted;
+  reducedMotionRef.current = prefersReducedMotion;
+  presetRef.current = preset;
+
+  const ambientLayerRef = useRef<HTMLDivElement | null>(null);
+  const coreWashRef = useRef<HTMLDivElement | null>(null);
+  const horizonLineRef = useRef<HTMLDivElement | null>(null);
+
+  const kinematicsRef = useRef<MotionKinematicState>({
+    gather: 0,
+    offset: 0,
+    stretch: 0,
+    heldLevel: 0,
+    lastSampleMs: performance.now(),
+    stateEnteredMs: performance.now(),
+    lastState: state,
+  });
+
+  const syncAmbientAtmosphere = useCallback((energy: number) => {
+    const p = presetRef.current;
+    const clampedEnergy = Math.max(0, Math.min(1, energy));
+    const targetOpacity = Math.min(
+      1,
+      p.ambientBaseOpacity + clampedEnergy * p.ambientEnergyBoost
+    );
+
+    if (ambientLayerRef.current) {
+      ambientLayerRef.current.style.opacity = targetOpacity.toFixed(3);
+      if (!reducedMotionRef.current) {
+        const scaleY = 1 + clampedEnergy * 0.26;
+        const scaleX = 1 + clampedEnergy * 0.09;
+        ambientLayerRef.current.style.transform = `translate3d(0, 0, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`;
+      } else {
+        ambientLayerRef.current.style.transform = 'translate3d(0, 0, 0)';
+      }
+    }
+
+    if (coreWashRef.current) {
+      const washOpacity = Math.min(0.95, targetOpacity * 0.85 + clampedEnergy * 0.25);
+      coreWashRef.current.style.opacity = washOpacity.toFixed(3);
+    }
+
+    if (horizonLineRef.current) {
+      const rimOpacity = Math.min(0.95, 0.16 + clampedEnergy * 0.72);
+      horizonLineRef.current.style.opacity = (p.active ? rimOpacity : 0).toFixed(3);
+    }
+  }, []);
+
+  useEffect(() => {
+    syncAmbientAtmosphere(state === 'ending' ? 0 : 0.08);
+  }, [state, isMuted, preset, syncAmbientAtmosphere]);
+
+  const getBeamLevel = useCallback((): number => {
+    const current = stateRef.current;
+    const levels = audioLevelsRef.current;
+
+    let activeEnergy = 0;
+
+    switch (current) {
+      case 'listening':
+        activeEnergy = isMutedRef.current ? 0 : levels.inputLevel;
+        break;
+      case 'speaking':
+        activeEnergy = levels.outputLevel;
+        break;
+      case 'entering':
+        activeEnergy = Math.max(0.24, levels.inputLevel);
+        break;
+      case 'interrupted':
+        activeEnergy = 0.14;
+        break;
+      case 'thinking':
+      case 'idle':
+      case 'error':
+      case 'ending':
+      default:
+        activeEnergy = 0;
+        break;
+    }
+
+    syncAmbientAtmosphere(activeEnergy);
+    return activeEnergy;
+  }, [audioLevelsRef, syncAmbientAtmosphere]);
+
+  const getBeamMotion = useCallback((): VoiceBeamMotion => {
+    const now = performance.now();
+    const k = kinematicsRef.current;
+    const current = stateRef.current;
+
+    if (k.lastState !== current) {
+      k.lastState = current;
+      k.stateEnteredMs = now;
+    }
+
+    const dtSec = Math.min(0.1, Math.max(0.001, (now - k.lastSampleMs) / 1000));
+    k.lastSampleMs = now;
+    const elapsedSec = (now - k.stateEnteredMs) / 1000;
+
+    let targetGather = 0;
+    let targetOffset = 0;
+    let targetStretch = 0;
+    let targetHeldLevel = 0;
+    let gatherSpeed = 7.5;
+
+    if (current === 'entering') {
+      const progress = Math.min(1, elapsedSec / 0.65);
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      targetGather = 0.58 * (1 - easeOut);
+      targetOffset = 0;
+      targetStretch = 0.25 * (1 - easeOut);
+      targetHeldLevel = 0.48 * (1 - easeOut * 0.4);
+      gatherSpeed = 12;
+    } else if (current === 'thinking') {
+      targetGather = 0.92;
+      targetHeldLevel = 0.48;
+      gatherSpeed = 6.5;
+
+      if (reducedMotionRef.current) {
+        targetOffset = 0;
+        targetStretch = 0.08;
+      } else {
+        const phase = elapsedSec * 2.25;
+        targetOffset = Math.sin(phase) * 0.72;
+        const velocity = Math.abs(Math.cos(phase));
+        targetStretch = 0.12 + velocity * 0.34;
+      }
+    } else if (current === 'interrupted') {
+      const pulse = Math.max(0, 1 - elapsedSec / 0.26);
+      targetGather = 0.42 * pulse;
+      targetOffset = 0;
+      targetStretch = 0.18 * pulse;
+      targetHeldLevel = 0.52 * pulse;
+      gatherSpeed = 24;
+    } else {
+      targetGather = 0;
+      targetOffset = 0;
+      targetStretch = 0;
+      targetHeldLevel = 0;
+      gatherSpeed = current === 'speaking' ? 9 : 7;
+    }
+
+    k.gather = lerpTowards(k.gather, targetGather, dtSec, gatherSpeed);
+    k.offset = lerpTowards(k.offset, targetOffset, dtSec, current === 'thinking' ? 14 : 9);
+    k.stretch = lerpTowards(k.stretch, targetStretch, dtSec, 10);
+    k.heldLevel = lerpTowards(k.heldLevel, targetHeldLevel, dtSec, 9);
+
+    if (k.gather < 0.004 && targetGather === 0) {
+      k.gather = 0;
+      k.offset = 0;
+      k.stretch = 0;
+      k.heldLevel = 0;
+    }
+
+    return {
+      gather: k.gather,
+      offset: k.offset,
+      stretch: k.stretch,
+      heldLevel: k.heldLevel,
+      cornerFollow: 0.14,
+    };
+  }, []);
+
+  return (
+    <div
+      className={cn(
+        'relative w-full h-full overflow-hidden bg-[#030508] select-none',
+        className
+      )}
+      data-testid="blink-voice-glow"
+      data-voice-state={state}
+      data-voice-muted={isMuted ? 'true' : 'false'}
+    >
+      {/* Layer 1: Fullscreen Atmospheric Horizon Diffusion (GPU-composited, ref-driven) */}
+      <div
+        ref={ambientLayerRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-[-15%] bottom-[-18%] h-[78%] origin-bottom transition-[background] duration-700 ease-out will-change-transform"
+        style={{
+          opacity: preset.ambientBaseOpacity,
+          background: `radial-gradient(ellipse 68% 64% at 50% 100%, ${preset.ambientPrimaryRgba} 0%, ${preset.ambientSecondaryRgba} 42%, rgba(3, 5, 8, 0) 76%)`,
+          filter: 'blur(36px)',
+        }}
+      />
+
+      {/* Layer 2: Soft Core Horizon Wash anchoring VoiceBeam into the fullscreen void */}
+      <div
+        ref={coreWashRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[42%] transition-[background] duration-700 ease-out"
+        style={{
+          opacity: preset.ambientBaseOpacity * 0.8,
+          background: `radial-gradient(ellipse 52% 85% at 50% 100%, ${preset.ambientPrimaryRgba} 0%, rgba(3, 5, 8, 0) 72%)`,
+        }}
+      />
+
+      {/* Layer 3: Subtle 1px Specular Horizon Reflection Line */}
+      <div
+        ref={horizonLineRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[1px] z-10 transition-opacity duration-300"
+        style={{
+          opacity: preset.active ? 0.22 : 0,
+          background: `linear-gradient(90deg, rgba(255,255,255,0) 10%, ${preset.colors[0] ?? '#35DFFF'} 50%, rgba(255,255,255,0) 90%)`,
+        }}
+      />
+
+      {/* Layer 4: Primary VoiceBeam Renderer */}
+      <VoiceBeam
+        type="mobile"
+        theme="dark"
+        borderRadius={0}
+        scale={effectiveScale}
+        active={preset.active}
+        strength={preset.strength}
+        level={getBeamLevel}
+        motion={getBeamMotion}
+        idle={prefersReducedMotion ? Math.min(0.14, preset.idle) : preset.idle}
+        breatheDuration={preset.breatheDuration}
+        attack={preset.attack}
+        release={preset.release}
+        reach={preset.reach}
+        spread={preset.spread}
+        flow={prefersReducedMotion ? 0 : preset.flow}
+        bend={preset.bend}
+        bandStrength={preset.bandStrength}
+        bandAberration={preset.bandAberration}
+        glowSize={preset.glowSize}
+        brightness={preset.brightness}
+        saturation={preset.saturation}
+        distortion={prefersReducedMotion ? 0 : preset.distortion}
+        innerHeight={preset.innerHeight}
+        bloomHeight={preset.bloomHeight}
+        staticColors={prefersReducedMotion || preset.staticColors}
+        hueRange={preset.hueRange}
+        hueDuration={preset.hueDuration}
+        colors={preset.colors}
+        bandColors={preset.bandColors}
+        className="w-full h-full"
+        style={{ width: '100%', height: '100%', borderRadius: 0 }}
+      >
+        <div className="relative w-full h-full flex flex-col justify-between bg-transparent">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-[#030508]/90 via-[#030508]/40 to-transparent"
+          />
+          {children}
+        </div>
+      </VoiceBeam>
+    </div>
+  );
+};

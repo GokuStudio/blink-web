@@ -17,6 +17,10 @@ import { useTrackingStore } from '@/features/blink-device/state/trackingStore';
 import type { BlinkExpressionType } from '@/shared/contracts';
 import type { IRealtimeService } from '@/shared/realtime/interfaces/realtime-service.interface';
 import { InsightsApp } from '@/features/insights/elevated/InsightsApp';
+import { useBlinkVoiceExperience } from '@/features/hey-blink/integration/useBlinkVoiceExperience';
+import { BlinkVoiceControlsPill } from '@/features/hey-blink/components/BlinkVoiceControlsPill';
+import type { IVoiceSession } from '@/features/hey-blink/services/voice-session.interface';
+import type { DiagnosticActionType } from '@/features/demo/diagnostics/diagnosticStore';
 import {
   useIntegratedDemoSession,
   type IntegratedStageState,
@@ -120,14 +124,33 @@ function getStageStatusMeta(
 export interface DemoPageProps {
   /** Optional injected realtime service for deterministic automated testing. */
   realtimeService?: IRealtimeService;
+  /** Optional injected voice session factory for deterministic automated testing. */
+  createVoiceSession?: () => IVoiceSession;
 }
 
-export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService }) => {
+export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService, createVoiceSession }) => {
   const [searchParams] = useSearchParams();
   const prefersReducedMotion = Boolean(useReducedMotion());
 
   const session = useIntegratedDemoSession({ injectedService: realtimeService });
+  const voice = useBlinkVoiceExperience({ createSession: createVoiceSession });
   const guideProgress = useExploreBlinkProgress(session);
+
+  const handleCombinedDiagnosticAction = (action: DiagnosticActionType) => {
+    if (action === 'retry_voice') {
+      void voice.retryVoice();
+      return;
+    }
+    if (action === 'end_voice') {
+      void voice.endVoice();
+      return;
+    }
+    if (action === 'enable_voice_preview') {
+      void voice.startPreviewVoice();
+      return;
+    }
+    session.handleDiagnosticAction(action);
+  };
 
   // Granular device & tracking selectors (never subscribing to 30fps closure floats)
   const storeExpr = useDeviceStore((s) => s.expression);
@@ -247,7 +270,7 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService }) => {
                   <IssueCenterPanel
                     open={true}
                     onClose={() => setActiveDrawer(null)}
-                    onAction={session.handleDiagnosticAction}
+                    onAction={handleCombinedDiagnosticAction}
                     triggerRef={issueTriggerRef}
                   />
                 )}
@@ -346,6 +369,7 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService }) => {
                   mode="desktop-integrated"
                   expression={expression}
                   frameless={true}
+                  voiceExperience={voice}
                   onWebGLStatusChange={session.handleWebGLStatusChange}
                   onSustainedLowFps={session.handleSustainedLowFps}
                   onBezelError={session.handleBezelError}
@@ -355,7 +379,10 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService }) => {
 
               {/* Centered Floating Control Capsule beneath Device */}
               <div className="mt-5 flex flex-col items-center gap-2">
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-[#151719]/92 border border-white/[0.09] p-1.5 shadow-[0_14px_36px_rgba(0,0,0,0.68)] backdrop-blur-md">
+                <div
+                  data-testid="device-primary-controls"
+                  className="inline-flex flex-wrap items-center justify-center gap-1.5 rounded-full bg-[#151719]/92 border border-white/[0.09] p-1.5 shadow-[0_14px_36px_rgba(0,0,0,0.68)] backdrop-blur-md"
+                >
                   <button
                     type="button"
                     onClick={() => void session.toggleCamera()}
@@ -365,7 +392,7 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService }) => {
                       isCameraActive ? 'Turn camera off' : 'Enable camera for live eye mirroring'
                     }
                     aria-pressed={isCameraActive}
-                    className={`inline-flex h-10 items-center gap-2 rounded-full px-4 text-[12px] font-medium transition-all duration-200 cursor-pointer disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-[#A6FA4C] ${
+                    className={`inline-flex h-11 min-w-[44px] items-center justify-center gap-2 rounded-full px-4 text-[12px] font-medium transition-all duration-200 active:scale-[0.98] cursor-pointer disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-[#A6FA4C] ${
                       isCameraActive
                         ? 'bg-[#A6FA4C]/16 border border-[#A6FA4C]/45 text-[#A6FA4C] hover:bg-[#A6FA4C]/22'
                         : 'bg-white/[0.07] border border-white/[0.10] text-[#F2F4F1] hover:bg-white/[0.13]'
@@ -378,7 +405,7 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService }) => {
                     ) : (
                       <CameraOff className="h-4 w-4 text-neutral-300" strokeWidth={1.9} />
                     )}
-                    <span>
+                    <span className="whitespace-nowrap">
                       {session.isCameraBusy || isModelLoading
                         ? 'Starting…'
                         : isCameraActive
@@ -387,7 +414,7 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService }) => {
                     </span>
                   </button>
 
-                  {isCameraActive ? (
+                  {isCameraActive && !voice.isEngaged ? (
                     <button
                       type="button"
                       onClick={() => setMirroringEnabled(!isMirroringEnabled)}
@@ -396,7 +423,7 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService }) => {
                       }
                       aria-pressed={isMirroringEnabled}
                       data-testid="stage-mirror-toggle"
-                      className={`inline-flex h-10 w-10 items-center justify-center rounded-full border transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[#A6FA4C] ${
+                      className={`inline-flex h-11 w-11 items-center justify-center rounded-full border transition-colors active:scale-[0.98] cursor-pointer focus-visible:outline-2 focus-visible:outline-[#A6FA4C] ${
                         isMirroringEnabled
                           ? 'bg-[#35DFFF]/12 border-[#35DFFF]/35 text-[#35DFFF] hover:bg-[#35DFFF]/20'
                           : 'bg-white/[0.04] border-white/[0.08] text-neutral-400 hover:text-white'
@@ -411,25 +438,35 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService }) => {
                         <EyeOff className="h-4 w-4" strokeWidth={1.9} />
                       )}
                     </button>
-                  ) : session.stageState === 'OFFLINE' ? (
+                  ) : !isCameraActive && session.stageState === 'OFFLINE' ? (
                     <button
                       type="button"
                       onClick={() => void session.reconnectSession()}
                       aria-label="Reconnect Blink session"
                       data-testid="stage-reconnect-btn"
-                      className="inline-flex h-10 items-center gap-1.5 rounded-full bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.08] px-3.5 text-[12px] font-medium text-neutral-200 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[#A6FA4C]"
+                      className="inline-flex h-11 min-w-[44px] items-center justify-center gap-1.5 rounded-full bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.08] px-3.5 text-[12px] font-medium text-neutral-200 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[#A6FA4C]"
                     >
                       <RefreshCw className="h-3.5 w-3.5 text-[#A6FA4C]" />
                       <span>Reconnect</span>
                     </button>
                   ) : null}
+
+                  {/* Subtle optical divider between Camera and Voice controls */}
+                  <div className="h-5 w-px bg-white/[0.09] mx-0.5" aria-hidden="true" />
+
+                  {/* Cohesive Voice Control Pill ([ Talk to Blink ] / [ Mic On ] [ Interrupt ] [ End ]) */}
+                  <BlinkVoiceControlsPill voice={voice} />
                 </div>
 
                 <p
                   data-testid="stage-status-caption"
-                  className="text-[11.5px] text-neutral-400 text-center max-w-[340px] px-2 leading-snug"
+                  className="text-[11.5px] text-neutral-400 text-center max-w-[360px] px-2 leading-snug"
                 >
-                  {statusMeta.caption}
+                  {voice.isEngaged
+                    ? voice.isSimulated
+                      ? 'Voice preview active · Camera monitoring and Elevated telemetry continue uninterrupted'
+                      : 'Voice mode active · Camera monitoring and Elevated telemetry continue uninterrupted'
+                    : statusMeta.caption}
                 </p>
               </div>
             </div>
@@ -518,7 +555,7 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService }) => {
               <IssueCenterPanel
                 open={true}
                 onClose={() => setActiveDrawer(null)}
-                onAction={session.handleDiagnosticAction}
+                onAction={handleCombinedDiagnosticAction}
                 triggerRef={issueTriggerRef}
               />
             )}

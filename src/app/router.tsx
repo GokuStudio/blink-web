@@ -4,6 +4,7 @@ import { DevicePage } from '@/pages/DevicePage';
 import { InsightsPage } from '@/pages/InsightsPage';
 import { JoinPage } from '@/pages/JoinPage';
 import { DevHarnessPage } from '@/pages/DevHarnessPage';
+import { HeyBlinkPage } from '@/pages/HeyBlinkPage';
 
 const routes = [
   {
@@ -25,6 +26,10 @@ const routes = [
   {
     path: '/join/:roomCode',
     element: <JoinPage />,
+  },
+  {
+    path: '/hey-blink',
+    element: <HeyBlinkPage />,
   },
   ...(import.meta.env.DEV
     ? [

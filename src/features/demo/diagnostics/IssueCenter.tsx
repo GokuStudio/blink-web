@@ -6,6 +6,9 @@ import {
   Info,
   X,
   Camera,
+  Mic,
+  MicOff,
+  Sparkles,
   RefreshCw,
   Link2,
   ShieldAlert,
@@ -78,6 +81,12 @@ function getActionIcon(actionType?: DiagnosticActionType) {
       return ShieldAlert;
     case 'reload_rendering':
       return RotateCcw;
+    case 'retry_voice':
+      return Mic;
+    case 'end_voice':
+      return MicOff;
+    case 'enable_voice_preview':
+      return Sparkles;
     default:
       return RefreshCw;
   }

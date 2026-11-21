@@ -9,14 +9,17 @@
 import { create } from 'zustand';
 
 export type DiagnosticSeverity = 'INFO' | 'WARNING' | 'ERROR';
-export type DiagnosticCategory = 'camera' | 'firebase' | 'app' | 'performance';
+export type DiagnosticCategory = 'camera' | 'firebase' | 'voice' | 'app' | 'performance';
 
 export type DiagnosticActionType =
   | 'enable_camera'
   | 'retry_connection'
   | 'rejoin_room'
   | 'check_permissions'
-  | 'reload_rendering';
+  | 'reload_rendering'
+  | 'retry_voice'
+  | 'end_voice'
+  | 'enable_voice_preview';
 
 export type DiagnosticCode =
   // CAMERA
@@ -36,6 +39,17 @@ export type DiagnosticCode =
   | 'FIREBASE_DISCONNECTED'
   | 'DEVICE_PRESENCE_MISSING'
   | 'TELEMETRY_STALE'
+  // VOICE
+  | 'VOICE_MIC_PERMISSION_DENIED'
+  | 'VOICE_MIC_NOT_FOUND'
+  | 'VOICE_MIC_INTERRUPTED'
+  | 'VOICE_BACKEND_UNREACHABLE'
+  | 'VOICE_AUTH_FAILED'
+  | 'VOICE_QUOTA_EXCEEDED'
+  | 'VOICE_TRANSPORT_DISCONNECTED'
+  | 'VOICE_AUDIO_PLAYBACK_FAILED'
+  | 'VOICE_BROWSER_UNSUPPORTED'
+  | 'VOICE_SESSION_TERMINATED'
   // APP
   | 'WEBGL_UNAVAILABLE'
   | 'WEBGL_CONTEXT_LOST'
@@ -241,6 +255,112 @@ export const DIAGNOSTIC_CATALOG: Record<DiagnosticCode, DiagnosticTemplate> = {
     recommendedAction: 'Reconnect the session to resume fresh realtime updates.',
     actionType: 'retry_connection',
     actionLabel: 'Retry connection',
+  },
+
+  // VOICE
+  VOICE_MIC_PERMISSION_DENIED: {
+    code: 'VOICE_MIC_PERMISSION_DENIED',
+    category: 'voice',
+    severity: 'ERROR',
+    title: 'Microphone permission denied',
+    explanation:
+      'Browser microphone access is blocked, so Blink cannot listen to your voice.',
+    recommendedAction:
+      'Allow microphone access for this site in your browser address bar, then retry.',
+    actionType: 'retry_voice',
+    actionLabel: 'Retry voice',
+  },
+  VOICE_MIC_NOT_FOUND: {
+    code: 'VOICE_MIC_NOT_FOUND',
+    category: 'voice',
+    severity: 'ERROR',
+    title: 'No microphone detected',
+    explanation: 'No compatible audio input device was found on this system.',
+    recommendedAction: 'Connect or enable a microphone, then try talking to Blink again.',
+    actionType: 'retry_voice',
+    actionLabel: 'Retry voice',
+  },
+  VOICE_MIC_INTERRUPTED: {
+    code: 'VOICE_MIC_INTERRUPTED',
+    category: 'voice',
+    severity: 'WARNING',
+    title: 'Microphone capture interrupted',
+    explanation: 'The active microphone stream ended or your audio device was disconnected.',
+    recommendedAction: 'Check your microphone connection and restart voice mode.',
+    actionType: 'retry_voice',
+    actionLabel: 'Retry voice',
+  },
+  VOICE_BACKEND_UNREACHABLE: {
+    code: 'VOICE_BACKEND_UNREACHABLE',
+    category: 'voice',
+    severity: 'ERROR',
+    title: 'Voice service unreachable',
+    explanation:
+      'The live Gemini voice token backend is not configured or could not be reached.',
+    recommendedAction:
+      'Verify the voice token endpoint or launch clearly labeled simulated preview mode.',
+    actionType: 'enable_voice_preview',
+    actionLabel: 'Try preview mode',
+  },
+  VOICE_AUTH_FAILED: {
+    code: 'VOICE_AUTH_FAILED',
+    category: 'voice',
+    severity: 'ERROR',
+    title: 'Voice authorization unavailable',
+    explanation:
+      'Blink could not obtain a short-lived ephemeral voice token for this session.',
+    recommendedAction: 'Sign in with a verified session or retry voice initialization.',
+    actionType: 'retry_voice',
+    actionLabel: 'Retry voice',
+  },
+  VOICE_QUOTA_EXCEEDED: {
+    code: 'VOICE_QUOTA_EXCEEDED',
+    category: 'voice',
+    severity: 'WARNING',
+    title: 'Voice rate limit reached',
+    explanation: 'Too many voice sessions were requested in a short window.',
+    recommendedAction: 'Wait a moment before starting another conversation.',
+    actionType: 'retry_voice',
+    actionLabel: 'Try again',
+  },
+  VOICE_TRANSPORT_DISCONNECTED: {
+    code: 'VOICE_TRANSPORT_DISCONNECTED',
+    category: 'voice',
+    severity: 'WARNING',
+    title: 'Voice connection lost',
+    explanation: 'The realtime voice transport closed unexpectedly.',
+    recommendedAction: 'Retry to establish a new voice session or return to Eye Mode.',
+    actionType: 'retry_voice',
+    actionLabel: 'Reconnect voice',
+  },
+  VOICE_AUDIO_PLAYBACK_FAILED: {
+    code: 'VOICE_AUDIO_PLAYBACK_FAILED',
+    category: 'voice',
+    severity: 'WARNING',
+    title: 'Audio playback unavailable',
+    explanation: 'The browser blocked or could not initialize speaker audio output.',
+    recommendedAction: 'Ensure audio output is unmuted and retry from a click gesture.',
+    actionType: 'retry_voice',
+    actionLabel: 'Retry voice',
+  },
+  VOICE_BROWSER_UNSUPPORTED: {
+    code: 'VOICE_BROWSER_UNSUPPORTED',
+    category: 'voice',
+    severity: 'ERROR',
+    title: 'Browser voice API unsupported',
+    explanation:
+      'Live voice requires HTTPS (or localhost) with Web Audio and MediaDevices support.',
+    recommendedAction: 'Open Blink in a modern browser over HTTPS or localhost.',
+  },
+  VOICE_SESSION_TERMINATED: {
+    code: 'VOICE_SESSION_TERMINATED',
+    category: 'voice',
+    severity: 'WARNING',
+    title: 'Voice session ended unexpectedly',
+    explanation: 'The active voice conversation terminated before completion.',
+    recommendedAction: 'Start a fresh conversation when ready.',
+    actionType: 'retry_voice',
+    actionLabel: 'Retry voice',
   },
 
   // APP
@@ -461,10 +581,22 @@ export const useDiagnosticStore = create<DiagnosticStoreState>((set, get) => ({
 
     const now = Date.now();
     const resolvedEntry: DiagnosticIssue = { ...target, resolvedAt: now };
-    const nextHistory = [
-      resolvedEntry,
-      ...state.resolvedHistory.filter((h) => h.id !== resolvedEntry.id),
-    ].slice(0, MAX_RESOLVED_HISTORY);
+    const existingHistIdx = state.resolvedHistory.findIndex((h) => h.code === code);
+    let nextHistory: DiagnosticIssue[];
+    if (existingHistIdx >= 0) {
+      const existingHist = state.resolvedHistory[existingHistIdx];
+      const updatedHist: DiagnosticIssue = {
+        ...target,
+        occurrenceCount: existingHist.occurrenceCount + target.occurrenceCount,
+        resolvedAt: now,
+      };
+      nextHistory = [
+        updatedHist,
+        ...state.resolvedHistory.filter((_, idx) => idx !== existingHistIdx),
+      ].slice(0, MAX_RESOLVED_HISTORY);
+    } else {
+      nextHistory = [resolvedEntry, ...state.resolvedHistory].slice(0, MAX_RESOLVED_HISTORY);
+    }
 
     set({
       activeIssues: state.activeIssues.filter((item) => item.code !== code),

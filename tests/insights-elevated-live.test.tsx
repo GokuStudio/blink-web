@@ -181,7 +181,7 @@ describe('Blink Elevated Stage 2A: Live Firebase Realtime Data Integration', () 
     renderWithService(mockService);
 
     await waitFor(() => {
-      expect(screen.getByTestId('authenticity-mode-badge')).toBeInTheDocument();
+      expect(screen.getByTestId('authenticity-mode-badge')).toHaveTextContent('DEMO');
     });
 
     // Trigger disconnect on mockService
@@ -191,9 +191,8 @@ describe('Blink Elevated Stage 2A: Live Firebase Realtime Data Integration', () 
 
     await waitFor(() => {
       expect(screen.getByTestId('authenticity-mode-badge')).toHaveTextContent('OFFLINE');
+      expect(screen.getAllByText(/Desk Node 01 offline/i).length).toBeGreaterThanOrEqual(1);
     });
-
-    expect(screen.getAllByText(/Desk Node 01 offline/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it('6. Data staleness: marks telemetry stale when timestamp is older than 3500ms', async () => {

@@ -13,11 +13,21 @@ import { useDeviceStore } from '../state';
 import { BlinkEvent } from '../tracking/types';
 import { BlinkExpressionType } from '@/shared/contracts';
 
+export interface DeferredNudgeRecord {
+  reason: 'prolonged_stare' | 'low_blink_rate' | 'manual_test';
+  urgency: 'low' | 'medium' | 'high';
+  deferredAt: number;
+}
+
 export interface WellnessStoreState {
   metrics: WellnessMetrics;
   config: WellnessEngineConfig;
   isMonitoringActive: boolean;
   isAutoNudgeEnabled: boolean;
+  /** True while Blink is in active voice mode; defers nudge visuals without resetting fatigue timers */
+  isNudgeDeferredForVoice: boolean;
+  /** Legitimate nudge that became eligible during voice mode and will resume upon exit */
+  pendingDeferredNudge: DeferredNudgeRecord | null;
 
   // Lifecycle
   startMonitoring: () => void;
@@ -27,6 +37,7 @@ export interface WellnessStoreState {
   resetMonitoring: () => void;
   updateConfig: (partial: Partial<WellnessEngineConfig>) => void;
   toggleAutoNudge: (enabled?: boolean) => void;
+  setNudgeDeferredForVoice: (deferred: boolean) => void;
   forceCooldownExpiration: () => void;
   triggerManualNudge: () => void;
 
@@ -72,6 +83,8 @@ export const useWellnessStore = create<WellnessStoreState>((set, get) => {
     config: { ...DEFAULT_WELLNESS_CONFIG },
     isMonitoringActive: false,
     isAutoNudgeEnabled: true,
+    isNudgeDeferredForVoice: false,
+    pendingDeferredNudge: null,
 
     startMonitoring: () => {
       const now = performance.now();
@@ -105,6 +118,7 @@ export const useWellnessStore = create<WellnessStoreState>((set, get) => {
         simulationTimer = null;
       }
       wellnessEngineInstance.reset();
+      set({ pendingDeferredNudge: null });
       syncMetrics();
     },
 
@@ -117,6 +131,23 @@ export const useWellnessStore = create<WellnessStoreState>((set, get) => {
       const next = enabled !== undefined ? enabled : !get().isAutoNudgeEnabled;
       wellnessEngineInstance.setAutoNudgeEnabled(next);
       syncMetrics();
+    },
+
+    setNudgeDeferredForVoice: (deferred) => {
+      const now = performance.now();
+      const pending = get().pendingDeferredNudge;
+      set({ isNudgeDeferredForVoice: deferred });
+      if (!deferred && pending) {
+        set({ pendingDeferredNudge: null });
+        // Re-evaluate against current cooldown and validity logic before firing;
+        // never silently discard legitimate nudges and never reset fatigue timers.
+        const decision = wellnessEngineInstance.evaluate(now);
+        if (decision.eligible && decision.triggerReason && decision.urgency) {
+          executeNudgeTrigger(decision.triggerReason, decision.urgency, now);
+        } else {
+          syncMetrics(now);
+        }
+      }
     },
 
     forceCooldownExpiration: () => {
@@ -143,7 +174,20 @@ export const useWellnessStore = create<WellnessStoreState>((set, get) => {
       // Evaluate eligibility on fresh tracking frame
       const decision = wellnessEngineInstance.evaluate(now);
       if (decision.eligible && decision.triggerReason && decision.urgency) {
-        executeNudgeTrigger(decision.triggerReason, decision.urgency, now);
+        if (get().isNudgeDeferredForVoice) {
+          // Defer nonurgent visual nudge during active voice conversation;
+          // retain pending status without resetting fatigue timers.
+          set({
+            pendingDeferredNudge: {
+              reason: decision.triggerReason,
+              urgency: decision.urgency,
+              deferredAt: now,
+            },
+          });
+          syncMetrics(now);
+        } else {
+          executeNudgeTrigger(decision.triggerReason, decision.urgency, now);
+        }
       } else {
         syncMetrics(now);
       }
