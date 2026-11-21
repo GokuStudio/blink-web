@@ -1,0 +1,13 @@
+{
+  "name": "hey-blink-token-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^3.6.1",
+    "firebase-admin": "^13.2.0"
+  }
+}
