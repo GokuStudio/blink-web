@@ -243,6 +243,38 @@ export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps>
               </div>
             </div>
 
+            {/* On-Screen Status Pill Toggle */}
+            <div className="flex items-center justify-between pt-0.5">
+              <div>
+                <span className="text-[11px] text-neutral-200 block leading-tight">
+                  Show status text
+                </span>
+                <span className="text-[9.5px] text-neutral-500 block">
+                  Hide Listening / Thinking / Speaking pill
+                </span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={tuning.showStatusLabel}
+                onClick={() => updateTuning({ showStatusLabel: !tuning.showStatusLabel })}
+                data-testid="voice-toggle-status-label"
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[#35DFFF] ${
+                  tuning.showStatusLabel
+                    ? 'bg-[#35DFFF]/30 border-[#35DFFF]/50'
+                    : 'bg-white/[0.08] border-white/[0.12]'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 rounded-full transition-transform ${
+                    tuning.showStatusLabel
+                      ? 'translate-x-[18px] bg-[#35DFFF]'
+                      : 'translate-x-[2px] bg-neutral-400'
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* Sensitivity Slider */}
             <label className="block">
               <div className="flex justify-between text-[11px] text-neutral-300 mb-1">

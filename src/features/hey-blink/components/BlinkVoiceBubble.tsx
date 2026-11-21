@@ -297,6 +297,7 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
   const glowScale = userTuning?.glowScale ?? 1;
   const speedScale = userTuning?.speedScale ?? 1;
   const warmthOffset = userTuning?.warmthOffset ?? 0;
+  const showStatusLabel = userTuning?.showStatusLabel ?? true;
 
   const tuning = useMemo(
     () => ({
@@ -421,7 +422,7 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
         )}
       </div>
 
-      {/* Compact, nonintrusive state label positioned cleanly inside visible screen aperture */}
+      {/* Compact, nonintrusive state label (hidden visually when user prefers pure ring mode, kept for errors & screen readers) */}
       <div
         role="status"
         aria-live="polite"
@@ -429,7 +430,7 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
           variant === 'standalone-device' ? 'bottom-[15%]' : 'bottom-[21.5%]'
         }`}
       >
-        {statusCaption && (
+        {statusCaption && (showStatusLabel || experienceState === 'VOICE_ERROR') ? (
           <div
             data-testid="voice-bubble-status-label"
             className="inline-flex items-center gap-1.5 rounded-full bg-black/55 border border-white/[0.08] px-3 py-1 backdrop-blur-md"
@@ -460,7 +461,9 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
               </span>
             )}
           </div>
-        )}
+        ) : statusCaption ? (
+          <span className="sr-only">{statusCaption}</span>
+        ) : null}
 
         {experienceState === 'VOICE_ERROR' && errorMessage && (
           <p

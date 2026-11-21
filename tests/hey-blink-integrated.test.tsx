@@ -640,9 +640,18 @@ describe('Blink Stage 2D — Hey Blink Integrated Voice Assistant', () => {
     fireEvent.change(screen.getByTestId('voice-slider-sensitivity'), { target: { value: '1.3' } });
     expect((screen.getByTestId('voice-slider-sensitivity') as HTMLInputElement).value).toBe('1.3');
 
-    // Reset defaults restores 1.0
+    // Toggle "Show status text" off and confirm status pill hides while Voice Ring stays active
+    fireEvent.click(screen.getByTestId('stage-voice-toggle'));
+    await waitFor(() => {
+      expect(screen.getByTestId('voice-bubble-status-label')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('voice-toggle-status-label'));
+    expect(screen.queryByTestId('voice-bubble-status-label')).not.toBeInTheDocument();
+
+    // Reset defaults restores 1.0 and status text visible
     fireEvent.click(screen.getByTestId('voice-tuning-reset'));
     expect((screen.getByTestId('voice-slider-sensitivity') as HTMLInputElement).value).toBe('1');
+    expect(screen.getByTestId('voice-bubble-status-label')).toBeInTheDocument();
 
     // Escape closes popover cleanly
     fireEvent.keyDown(window, { key: 'Escape' });

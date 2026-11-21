@@ -94,6 +94,8 @@ export interface VoiceRingTuning {
   glowScale: number;
   speedScale: number;
   warmthOffset: number;
+  /** When false, hides the on-screen Listening / Thinking / Speaking pill so the ring speaks for itself */
+  showStatusLabel: boolean;
 }
 
 export const DEFAULT_VOICE_RING_TUNING: VoiceRingTuning = {
@@ -102,6 +104,7 @@ export const DEFAULT_VOICE_RING_TUNING: VoiceRingTuning = {
   glowScale: 1.0,
   speedScale: 1.0,
   warmthOffset: 0,
+  showStatusLabel: true,
 };
 
 export interface BlinkVoiceExperience {
