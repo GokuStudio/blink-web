@@ -230,10 +230,11 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
   const mutedRef = useRef<boolean>(isMuted);
   mutedRef.current = isMuted;
 
-  const [ringSize, setRingSize] = useState<number>(variant === 'standalone-device' ? 236 : 192);
+  const [ringSize, setRingSize] = useState<number>(variant === 'standalone-device' ? 236 : 152);
   const canvasSupported = useMemo(() => canRender2dCanvas(), []);
 
   // Dynamically size ring from host screen dimensions, maintaining generous black negative space
+  // Inside desktop-integrated mode, keep clear of the top camera housing and lower bezel rim.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
@@ -241,9 +242,12 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
     const updateSize = (width: number, height: number) => {
       const minDim = Math.min(width, height);
       if (minDim <= 0) return;
-      const ratio = variant === 'standalone-device' ? 0.44 : 0.46;
+      const ratio = variant === 'standalone-device' ? 0.44 : 0.34;
       const clamped = Math.round(
-        Math.max(136, Math.min(variant === 'standalone-device' ? 300 : 236, minDim * ratio))
+        Math.max(
+          variant === 'standalone-device' ? 156 : 118,
+          Math.min(variant === 'standalone-device' ? 300 : 184, minDim * ratio)
+        )
       );
       setRingSize((prev) => (Math.abs(prev - clamped) >= 4 ? clamped : prev));
     };
@@ -316,10 +320,12 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
       {/* Soft restrained spatial glow behind the Voice Ring */}
       <div
         aria-hidden="true"
-        className="absolute rounded-full transition-all duration-500 ease-out"
+        className={`absolute rounded-full transition-all duration-500 ease-out ${
+          variant === 'desktop-integrated' ? 'translate-y-[4%]' : ''
+        }`}
         style={{
-          width: ringSize * 1.55,
-          height: ringSize * 1.55,
+          width: ringSize * 1.5,
+          height: ringSize * 1.5,
           background: tuning.glowBackdrop,
           opacity: isExiting ? 0 : 1,
         }}
@@ -347,6 +353,8 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
         }
         data-testid="blink-voice-ring-wrapper"
         className={`relative flex items-center justify-center rounded-full ${
+          variant === 'desktop-integrated' ? 'translate-y-[4%]' : ''
+        } ${
           isInteractiveInterrupt && onBubbleClick
             ? 'pointer-events-auto cursor-pointer focus-visible:outline-2 focus-visible:outline-[#35DFFF]'
             : 'pointer-events-none'
@@ -380,12 +388,12 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
         )}
       </div>
 
-      {/* Compact, nonintrusive state label positioned cleanly below optical center */}
+      {/* Compact, nonintrusive state label positioned cleanly inside visible screen aperture */}
       <div
         role="status"
         aria-live="polite"
         className={`absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-center px-4 ${
-          variant === 'standalone-device' ? 'bottom-[15%]' : 'bottom-[16%]'
+          variant === 'standalone-device' ? 'bottom-[15%]' : 'bottom-[21.5%]'
         }`}
       >
         {statusCaption && (
