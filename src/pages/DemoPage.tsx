@@ -200,7 +200,7 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService, createVoice
             Blink
           </span>
           {/* Reserve horizontal space for the inline compact utility dock on <900px */}
-          <div className="w-[82px] h-8 shrink-0" aria-hidden="true" />
+          <div className="w-[116px] h-8 shrink-0" aria-hidden="true" />
         </div>
 
         <div
@@ -434,14 +434,6 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService, createVoice
 
                   {/* Cohesive Voice Control Pill ([ Talk to Blink ] / [ Mic On ] [ Interrupt ] [ End ]) */}
                   <BlinkVoiceControlsPill voice={voice} />
-
-                  {/* Compact Voice Provider, Mic & Ring Tuning Popover */}
-                  <BlinkVoiceSettingsPopover
-                    voice={voice}
-                    open={voiceSettingsOpen}
-                    onToggle={() => setVoiceSettingsOpen((v) => !v)}
-                    onClose={() => setVoiceSettingsOpen(false)}
-                  />
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 max-w-[380px] px-2">
@@ -541,6 +533,17 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService, createVoice
           open={activeDrawer === 'issues'}
           onToggle={() => toggleDrawer('issues')}
           buttonRef={issueTriggerRef}
+        />
+        <div
+          className="h-4 w-px min-[900px]:h-px min-[900px]:w-6 bg-white/[0.08]"
+          aria-hidden="true"
+        />
+        <BlinkVoiceSettingsPopover
+          voice={voice}
+          open={voiceSettingsOpen}
+          onToggle={() => setVoiceSettingsOpen((v) => !v)}
+          onClose={() => setVoiceSettingsOpen(false)}
+          placement="dock-left"
         />
       </div>
 

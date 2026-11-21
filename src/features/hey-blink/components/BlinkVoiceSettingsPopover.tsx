@@ -27,6 +27,8 @@ export interface BlinkVoiceSettingsPopoverProps {
   open: boolean;
   onToggle: () => void;
   onClose: () => void;
+  /** Visual variant & popover anchoring: 'dock-left' (utility rail) or 'capsule' (inline pill) */
+  placement?: 'dock-left' | 'capsule';
 }
 
 export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps> = ({
@@ -34,6 +36,7 @@ export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps>
   open,
   onToggle,
   onClose,
+  placement = 'capsule',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -68,6 +71,24 @@ export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps>
 
   const { tuning, updateTuning, resetTuning } = voice;
 
+  const triggerClassName =
+    placement === 'dock-left'
+      ? `relative flex h-8 w-8 min-[900px]:h-10 min-[900px]:w-10 items-center justify-center rounded-full min-[900px]:rounded-xl transition-all duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#35DFFF] ${
+          open
+            ? 'bg-[#35DFFF]/18 text-[#35DFFF]'
+            : 'text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.08]'
+        }`
+      : `inline-flex h-11 w-11 items-center justify-center rounded-full border transition-all duration-200 active:scale-[0.97] cursor-pointer focus-visible:outline-2 focus-visible:outline-[#35DFFF] ${
+          open
+            ? 'bg-[#35DFFF]/16 border-[#35DFFF]/45 text-[#35DFFF]'
+            : 'bg-white/[0.05] border-white/[0.09] text-neutral-300 hover:bg-white/[0.11] hover:text-white'
+        }`;
+
+  const popoverPositionClass =
+    placement === 'dock-left'
+      ? 'top-[calc(100%+10px)] -left-16 min-[900px]:top-auto min-[900px]:bottom-0 min-[900px]:left-[calc(100%+14px)]'
+      : 'bottom-[calc(100%+12px)] right-0';
+
   return (
     <div ref={containerRef} className="relative inline-flex items-center">
       <button
@@ -78,13 +99,12 @@ export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps>
         aria-haspopup="dialog"
         aria-label="Voice settings and visualizer tuning"
         title="Voice settings, microphone & visualizer tuning"
-        className={`inline-flex h-11 w-11 items-center justify-center rounded-full border transition-all duration-200 active:scale-[0.97] cursor-pointer focus-visible:outline-2 focus-visible:outline-[#35DFFF] ${
-          open
-            ? 'bg-[#35DFFF]/16 border-[#35DFFF]/45 text-[#35DFFF]'
-            : 'bg-white/[0.05] border-white/[0.09] text-neutral-300 hover:bg-white/[0.11] hover:text-white'
-        }`}
+        className={triggerClassName}
       >
-        <SlidersHorizontal className="h-4 w-4" strokeWidth={1.9} />
+        <SlidersHorizontal
+          className={placement === 'dock-left' ? 'h-[17px] w-[17px]' : 'h-4 w-4'}
+          strokeWidth={1.85}
+        />
       </button>
 
       {open && (
@@ -92,7 +112,7 @@ export const BlinkVoiceSettingsPopover: React.FC<BlinkVoiceSettingsPopoverProps>
           role="dialog"
           aria-label="Voice settings and tuning"
           data-testid="voice-settings-popover"
-          className="absolute bottom-[calc(100%+12px)] right-0 z-[70] w-[310px] max-w-[calc(100vw-32px)] rounded-2xl border border-white/[0.11] bg-[#111316]/96 p-4 text-left shadow-[0_24px_64px_rgba(0,0,0,0.85)] backdrop-blur-xl"
+          className={`absolute z-[70] w-[310px] max-w-[calc(100vw-32px)] rounded-2xl border border-white/[0.11] bg-[#111316]/96 p-4 text-left shadow-[0_24px_64px_rgba(0,0,0,0.85)] backdrop-blur-xl ${popoverPositionClass}`}
         >
           {/* Header */}
           <div className="flex items-center justify-between gap-2 pb-3 border-b border-white/[0.07]">
