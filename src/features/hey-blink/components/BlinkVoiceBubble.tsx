@@ -346,7 +346,11 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
       <div
         aria-hidden="true"
         className={`absolute rounded-full transition-all duration-500 ease-out ${
-          variant === 'desktop-integrated' ? 'translate-y-[4%]' : ''
+          variant === 'desktop-integrated'
+            ? experienceState === 'VOICE_ERROR'
+              ? '-translate-y-[8%]'
+              : 'translate-y-[4%]'
+            : ''
         }`}
         style={{
           width: ringSize * 1.5,
@@ -377,8 +381,12 @@ export const BlinkVoiceBubble: React.FC<BlinkVoiceBubbleProps> = ({
             : undefined
         }
         data-testid="blink-voice-ring-wrapper"
-        className={`relative flex items-center justify-center rounded-full ${
-          variant === 'desktop-integrated' ? 'translate-y-[4%]' : ''
+        className={`relative flex items-center justify-center rounded-full transition-transform duration-300 ${
+          variant === 'desktop-integrated'
+            ? experienceState === 'VOICE_ERROR'
+              ? '-translate-y-[8%] scale-[0.82]'
+              : 'translate-y-[4%]'
+            : ''
         } ${
           isInteractiveInterrupt && onBubbleClick
             ? 'pointer-events-auto cursor-pointer focus-visible:outline-2 focus-visible:outline-[#35DFFF]'

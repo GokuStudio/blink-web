@@ -242,15 +242,6 @@ export function classifyVoiceDiagnosticCode(
     return 'VOICE_QUOTA_EXCEEDED';
   }
   if (
-    msg.includes('authentication') ||
-    msg.includes('unauthorized') ||
-    msg.includes('401') ||
-    msg.includes('403') ||
-    msg.includes('credential')
-  ) {
-    return 'VOICE_AUTH_FAILED';
-  }
-  if (
     msg.includes('not configured') ||
     msg.includes('unreachable') ||
     msg.includes('could not reach') ||
@@ -258,6 +249,15 @@ export function classifyVoiceDiagnosticCode(
     code === 'NETWORK_UNAVAILABLE'
   ) {
     return 'VOICE_BACKEND_UNREACHABLE';
+  }
+  if (
+    msg.includes('authentication') ||
+    msg.includes('unauthorized') ||
+    msg.includes('401') ||
+    msg.includes('403') ||
+    msg.includes('credential')
+  ) {
+    return 'VOICE_AUTH_FAILED';
   }
   if (code === 'PROVIDER_DISCONNECTED' || msg.includes('websocket') || msg.includes('disconnect')) {
     return 'VOICE_TRANSPORT_DISCONNECTED';
