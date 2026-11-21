@@ -73,7 +73,7 @@ export const BlinkVoiceControlsPill: React.FC<BlinkVoiceControlsPillProps> = ({
             : 'Voice assistant unavailable in this browser'
         }
         aria-pressed={false}
-        className="inline-flex h-11 min-w-[44px] items-center justify-center gap-2 rounded-full bg-[#35DFFF]/12 border border-[#35DFFF]/35 px-4 text-[12px] font-medium text-[#DFF8FF] transition-all duration-200 hover:bg-[#35DFFF]/20 hover:border-[#35DFFF]/55 active:scale-[0.98] cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-[#35DFFF]"
+        className="inline-flex h-11 w-[152px] items-center justify-center gap-2 rounded-full bg-[#35DFFF]/12 border border-[#35DFFF]/35 px-3.5 text-[12px] font-medium text-[#DFF8FF] transition-all duration-200 hover:bg-[#35DFFF]/20 hover:border-[#35DFFF]/55 active:scale-[0.98] cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-[#35DFFF]"
       >
         <Mic className="h-4 w-4 text-[#35DFFF] shrink-0" strokeWidth={1.9} />
         <span className="whitespace-nowrap">Talk to Blink</span>

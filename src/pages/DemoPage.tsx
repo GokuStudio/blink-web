@@ -394,7 +394,7 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService, createVoice
                       isCameraActive ? 'Turn camera off' : 'Enable camera for live eye mirroring'
                     }
                     aria-pressed={isCameraActive}
-                    className={`inline-flex h-11 min-w-[44px] items-center justify-center gap-2 rounded-full px-4 text-[12px] font-medium transition-all duration-200 active:scale-[0.98] cursor-pointer disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-[#A6FA4C] ${
+                    className={`inline-flex h-11 w-[152px] items-center justify-center gap-2 rounded-full px-3.5 text-[12px] font-medium transition-all duration-200 active:scale-[0.98] cursor-pointer disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-[#A6FA4C] ${
                       isCameraActive
                         ? 'bg-[#A6FA4C]/16 border border-[#A6FA4C]/45 text-[#A6FA4C] hover:bg-[#A6FA4C]/22'
                         : 'bg-white/[0.07] border border-white/[0.10] text-[#F2F4F1] hover:bg-white/[0.13]'
