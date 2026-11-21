@@ -9,6 +9,7 @@ import type {
 import {
   computeResponsiveBeamScale,
   resolveVisualPreset,
+  type VoiceGlowTuning,
 } from './visual-presets';
 
 export interface BlinkVoiceGlowProps {
@@ -18,6 +19,8 @@ export interface BlinkVoiceGlowProps {
   isMuted: boolean;
   /** High-frequency audio levels ref (sampled at 60 FPS without React re-renders) */
   audioLevelsRef: React.MutableRefObject<VoiceAudioLevels>;
+  /** Optional live DialKit customization tuning */
+  tuning?: Partial<VoiceGlowTuning>;
   /** Foreground interactive overlay (status + minimal controls) */
   children?: React.ReactNode;
   className?: string;
@@ -41,20 +44,16 @@ function lerpTowards(current: number, target: number, dtSec: number, speed: numb
 /**
  * BlinkVoiceGlow — Fullscreen Voice Presence Visualizer
  *
- * Composes `voice-glow`'s `VoiceBeam` (using the `mobile` geometry preset,
- * custom cyan/electric-blue/violet palettes, and zero-re-render `level` & `motion`
- * getters) within a pitch-black fullscreen atmospheric canvas.
+ * Composes `voice-glow`'s `VoiceBeam` within a pitch-black fullscreen atmospheric
+ * canvas with a subtle specular bottom horizon hairline and live DialKit tuning.
  *
- * Performance guarantees:
- * - Zero React re-renders per frame (audio levels and thinking sweep kinematics
- *   are polled directly inside VoiceBeam's single shared rAF driver).
- * - Ambient horizon diffusion updates CSS transforms/opacity via a direct DOM ref.
- * - Full `prefers-reduced-motion` compliance.
+ * Zero React re-renders per animation frame.
  */
 export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
   state,
   isMuted,
   audioLevelsRef,
+  tuning,
   children,
   className,
 }) => {
@@ -74,9 +73,11 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
   }, []);
 
   const preset = useMemo(
-    () => resolveVisualPreset(state, isMuted),
-    [state, isMuted]
+    () => resolveVisualPreset(state, isMuted, tuning),
+    [state, isMuted, tuning]
   );
+
+  const effectiveScale = viewportScale * (tuning?.beamScale ?? 1);
 
   // Refs synced on state changes so rAF getters never need to recreate closures
   const stateRef = useRef<VoiceSessionState>(state);
@@ -91,6 +92,7 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
 
   const ambientLayerRef = useRef<HTMLDivElement | null>(null);
   const coreWashRef = useRef<HTMLDivElement | null>(null);
+  const horizonLineRef = useRef<HTMLDivElement | null>(null);
 
   const kinematicsRef = useRef<MotionKinematicState>({
     gather: 0,
@@ -102,10 +104,6 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
     lastState: state,
   });
 
-  /**
-   * Imperatively updates the fullscreen ambient horizon diffusion behind
-   * VoiceBeam using GPU-composited opacity & transform — zero React renders.
-   */
   const syncAmbientAtmosphere = useCallback((energy: number) => {
     const p = presetRef.current;
     const clampedEnergy = Math.max(0, Math.min(1, energy));
@@ -117,8 +115,8 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
     if (ambientLayerRef.current) {
       ambientLayerRef.current.style.opacity = targetOpacity.toFixed(3);
       if (!reducedMotionRef.current) {
-        const scaleY = 1 + clampedEnergy * 0.24;
-        const scaleX = 1 + clampedEnergy * 0.08;
+        const scaleY = 1 + clampedEnergy * 0.26;
+        const scaleX = 1 + clampedEnergy * 0.09;
         ambientLayerRef.current.style.transform = `translate3d(0, 0, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`;
       } else {
         ambientLayerRef.current.style.transform = 'translate3d(0, 0, 0)';
@@ -129,18 +127,17 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
       const washOpacity = Math.min(0.95, targetOpacity * 0.85 + clampedEnergy * 0.25);
       coreWashRef.current.style.opacity = washOpacity.toFixed(3);
     }
+
+    if (horizonLineRef.current) {
+      const rimOpacity = Math.min(0.95, 0.16 + clampedEnergy * 0.72);
+      horizonLineRef.current.style.opacity = (p.active ? rimOpacity : 0).toFixed(3);
+    }
   }, []);
 
-  // Ensure ambient atmosphere updates immediately when state changes even when beam is inactive
   useEffect(() => {
     syncAmbientAtmosphere(state === 'ending' ? 0 : 0.08);
-  }, [state, isMuted, syncAmbientAtmosphere]);
+  }, [state, isMuted, preset, syncAmbientAtmosphere]);
 
-  /**
-   * Frame-level getter sampled by VoiceBeam's single shared rAF loop.
-   * Strictly separates incoming user audio (listening) from outgoing
-   * assistant speech (speaking), and never fakes speech while thinking.
-   */
   const getBeamLevel = useCallback((): number => {
     const current = stateRef.current;
     const levels = audioLevelsRef.current;
@@ -158,7 +155,6 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
         activeEnergy = Math.max(0.24, levels.inputLevel);
         break;
       case 'interrupted':
-        // Instant drop of outgoing energy — brief crisp pulse handled by motion
         activeEnergy = 0.14;
         break;
       case 'thinking':
@@ -174,14 +170,6 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
     return activeEnergy;
   }, [audioLevelsRef, syncAmbientAtmosphere]);
 
-  /**
-   * Frame-level motion getter driving `VoiceBeam`'s native `motion` prop.
-   * Choreographs:
-   * - `entering`: luminous gather resolving outward into open listening glow
-   * - `thinking`: focused gathered beam gliding deliberately across the horizon
-   * - `interrupted`: immediate crisp contraction acknowledging barge-in
-   * - all other states: smooth release back to rest (`gather -> 0`)
-   */
   const getBeamMotion = useCallback((): VoiceBeamMotion => {
     const now = performance.now();
     const k = kinematicsRef.current;
@@ -203,7 +191,6 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
     let gatherSpeed = 7.5;
 
     if (current === 'entering') {
-      // Soft gather that opens gracefully into full voice presence
       const progress = Math.min(1, elapsedSec / 0.65);
       const easeOut = 1 - Math.pow(1 - progress, 3);
       targetGather = 0.58 * (1 - easeOut);
@@ -212,7 +199,6 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
       targetHeldLevel = 0.48 * (1 - easeOut * 0.4);
       gatherSpeed = 12;
     } else if (current === 'thinking') {
-      // Focused traveling beam — deliberate, contemplative, non-speech
       targetGather = 0.92;
       targetHeldLevel = 0.48;
       gatherSpeed = 6.5;
@@ -221,16 +207,12 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
         targetOffset = 0;
         targetStretch = 0.08;
       } else {
-        // Smooth eased oscillation with gentle turn dwell (period ~2.8s)
         const phase = elapsedSec * 2.25;
-        const rawSin = Math.sin(phase);
-        // Slightly dwell near center & soften reversals
-        targetOffset = rawSin * 0.72;
+        targetOffset = Math.sin(phase) * 0.72;
         const velocity = Math.abs(Math.cos(phase));
         targetStretch = 0.12 + velocity * 0.34;
       }
     } else if (current === 'interrupted') {
-      // Crisp, immediate contraction acknowledging user interruption
       const pulse = Math.max(0, 1 - elapsedSec / 0.26);
       targetGather = 0.42 * pulse;
       targetOffset = 0;
@@ -238,7 +220,6 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
       targetHeldLevel = 0.52 * pulse;
       gatherSpeed = 24;
     } else {
-      // Smoothly release back into full multi-lobe voice glow
       targetGather = 0;
       targetOffset = 0;
       targetStretch = 0;
@@ -251,7 +232,6 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
     k.stretch = lerpTowards(k.stretch, targetStretch, dtSec, 10);
     k.heldLevel = lerpTowards(k.heldLevel, targetHeldLevel, dtSec, 9);
 
-    // Keep resting states strictly zeroed once settled so distortion stays enabled
     if (k.gather < 0.004 && targetGather === 0) {
       k.gather = 0;
       k.offset = 0;
@@ -301,12 +281,23 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
         }}
       />
 
-      {/* Layer 3: Primary VoiceBeam Renderer (voice-glow mobile preset + custom Blink choreography) */}
+      {/* Layer 3: Subtle 1px Specular Horizon Reflection Line */}
+      <div
+        ref={horizonLineRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[1px] z-10 transition-opacity duration-300"
+        style={{
+          opacity: preset.active ? 0.22 : 0,
+          background: `linear-gradient(90deg, rgba(255,255,255,0) 10%, ${preset.colors[0] ?? '#35DFFF'} 50%, rgba(255,255,255,0) 90%)`,
+        }}
+      />
+
+      {/* Layer 4: Primary VoiceBeam Renderer */}
       <VoiceBeam
         type="mobile"
         theme="dark"
         borderRadius={0}
-        scale={viewportScale}
+        scale={effectiveScale}
         active={preset.active}
         strength={preset.strength}
         level={getBeamLevel}
@@ -335,14 +326,11 @@ export const BlinkVoiceGlow: React.FC<BlinkVoiceGlowProps> = ({
         className="w-full h-full"
         style={{ width: '100%', height: '100%', borderRadius: 0 }}
       >
-        {/* Fullscreen dark interior container for foreground overlay chrome */}
         <div className="relative w-full h-full flex flex-col justify-between bg-transparent">
-          {/* Top negative-space vignette keeping attention grounded on the luminous presence */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-[#030508]/85 via-[#030508]/35 to-transparent"
+            className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-[#030508]/90 via-[#030508]/40 to-transparent"
           />
-
           {children}
         </div>
       </VoiceBeam>

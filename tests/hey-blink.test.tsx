@@ -19,6 +19,14 @@ vi.spyOn(document, 'createElementNS').mockImplementation((ns: string | null, tag
 });
 
 beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+  }
+
   Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
     configurable: true,
     value: vi.fn(() => ({
@@ -332,7 +340,7 @@ describe('Hey Blink — Route & UI Integration', () => {
     vi.useRealTimers();
   });
 
-  it('renders /hey-blink independently with Talk to Blink trigger and simulation disclosure', () => {
+  it('renders /hey-blink independently with Talk to Blink trigger by default', () => {
     render(
       <MemoryRouter initialEntries={['/hey-blink']}>
         <Routes>
@@ -344,30 +352,49 @@ describe('Hey Blink — Route & UI Integration', () => {
     expect(screen.getByTestId('hey-blink-screen')).toBeInTheDocument();
     expect(screen.getByTestId('blink-voice-glow')).toHaveAttribute('data-voice-state', 'idle');
     expect(screen.getByTestId('talk-to-blink-button')).toHaveTextContent(/Talk to Blink/i);
-    expect(screen.getByTestId('voice-simulation-badge')).toHaveTextContent(
-      /Simulated Voice Preview/i
-    );
   });
 
-  it('supports start, mute, interrupt, error recovery, end, and DeviceExperienceController hooks', async () => {
+  it('supports hands-free UI mode without routine Start/End/Interrupt buttons', () => {
+    render(
+      <MemoryRouter>
+        <HeyBlinkScreen interactionMode="hands-free" />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('hey-blink-screen')).toHaveAttribute(
+      'data-interaction-mode',
+      'hands-free'
+    );
+    expect(screen.getByTestId('enable-hands-free-button')).toHaveTextContent(
+      /Enable hands-free mode/i
+    );
+    expect(screen.queryByTestId('talk-to-blink-button')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('voice-end-button')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('voice-interrupt-button')).not.toBeInTheDocument();
+  });
+
+  it('supports manual mode start, mute, interrupt, error recovery, end, and DeviceExperienceController hooks', async () => {
     const onPrepareConversationTransition = vi.fn();
     const onConversationActive = vi.fn();
     const onConversationEnding = vi.fn();
     const onReturnToCompanionEyes = vi.fn();
+    let activeMockSession: MockVoiceSession | null = null;
 
     const { unmount } = render(
       <MemoryRouter>
         <HeyBlinkScreen
           embedded
-          enableDevPanel
-          createSession={() =>
-            new MockVoiceSession({
+          enableDevPanel={false}
+          interactionMode="manual"
+          createSession={() => {
+            activeMockSession = new MockVoiceSession({
               enteringDurationMs: 50,
               endingDurationMs: 50,
               interruptedDurationMs: 50,
               autoCycle: false,
-            })
-          }
+            });
+            return activeMockSession;
+          }}
           transitionHooks={{
             onPrepareConversationTransition,
             onConversationActive,
@@ -398,21 +425,19 @@ describe('Hey Blink — Route & UI Integration', () => {
     expect(screen.getByTestId('voice-mute-button')).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('voice-status-indicator')).toHaveTextContent(/Muted/i);
 
-    // Open dev panel and trigger Speaking -> Interrupt
+    // Trigger Speaking -> Interrupt button is intentionally omitted (barge-in via voice or Spacebar)
     await act(async () => {
-      fireEvent.click(screen.getByTestId('voice-dev-panel-toggle'));
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('dev-state-speaking'));
+      activeMockSession!.triggerStateForDev('speaking');
     });
     expect(screen.getByTestId('hey-blink-screen')).toHaveAttribute(
       'data-voice-state',
       'speaking'
     );
-    expect(screen.getByTestId('voice-interrupt-button')).toBeInTheDocument();
+    expect(screen.queryByTestId('voice-interrupt-button')).not.toBeInTheDocument();
 
+    // Spacebar keyboard interrupt works immediately
     await act(async () => {
-      fireEvent.click(screen.getByTestId('voice-interrupt-button'));
+      fireEvent.keyDown(window, { code: 'Space' });
     });
     expect(screen.getByTestId('hey-blink-screen')).toHaveAttribute(
       'data-voice-state',
@@ -429,7 +454,7 @@ describe('Hey Blink — Route & UI Integration', () => {
 
     // Trigger Error -> Retry
     await act(async () => {
-      fireEvent.click(screen.getByTestId('dev-error-network'));
+      activeMockSession!.triggerSimulatedError('NETWORK_UNAVAILABLE');
     });
     expect(screen.getByTestId('voice-error-state')).toBeInTheDocument();
 
@@ -465,6 +490,7 @@ describe('Hey Blink — Route & UI Integration', () => {
               element={
                 <HeyBlinkScreen
                   enableDevPanel
+                  interactionMode="manual"
                   createSession={() =>
                     new MockVoiceSession({
                       enteringDurationMs: 40,

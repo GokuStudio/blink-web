@@ -1,44 +1,63 @@
 import type { VoiceBeamProps } from 'voice-glow';
 import type { VoiceSessionState } from '../services/voice-session.interface';
 
+export type BlinkAtmosphereId =
+  | 'blink-cyan'
+  | 'aurora-violet'
+  | 'bioluminescent'
+  | 'midnight-ice'
+  | 'obsidian-mono';
+
+export interface VoiceGlowTuning {
+  atmosphere: BlinkAtmosphereId;
+  glowIntensity: number; // 0.3..1.5 (default 1.0)
+  horizonReach: number; // 0.5..1.6 (default 1.0)
+  motionFlow: number; // 0.0..2.0 (default 1.0)
+  beamScale: number; // 0.65..1.5 (default 1.0)
+  ambientHalo: number; // 0.0..1.8 (default 1.0)
+  chromaticRim: boolean; // default true
+  useCustomColors: boolean;
+  primaryColor: string;
+  accentColor: string;
+}
+
+export const DEFAULT_VOICE_GLOW_TUNING: VoiceGlowTuning = {
+  atmosphere: 'blink-cyan',
+  glowIntensity: 1.0,
+  horizonReach: 1.0,
+  motionFlow: 1.0,
+  beamScale: 1.0,
+  ambientHalo: 1.0,
+  chromaticRim: true,
+  useCustomColors: false,
+  primaryColor: '#35DFFF',
+  accentColor: '#7C3AED',
+};
+
 export interface BlinkVisualPreset {
-  /** Whether VoiceBeam effect layers are active (false fades out gracefully) */
   active: boolean;
-  /** Overall opacity of VoiceBeam layers (0..1) */
   strength: number;
-  /** Resting breathing level when silent (0..1) */
   idle: number;
-  /** Idle breathing cycle duration in seconds */
   breatheDuration: number;
-  /** Attack / release tuning on VoiceBeam's internal envelope */
   attack: number;
   release: number;
-  /** Vertical rise & horizontal spread multipliers */
   reach: number;
   spread: number;
-  /** Horizontal spectrum travel speed (px/s at full level) */
   flow: number;
-  /** Contour bend height (px at full level) */
   bend: number;
-  /** Luminous contour band styling */
   bandStrength: number;
   bandAberration: number;
-  /** Bloom & diffusion controls */
   glowSize: number;
   brightness: number;
   saturation: number;
   distortion: number;
   innerHeight: number;
   bloomHeight: number;
-  /** Hue drift parameters */
   staticColors: boolean;
   hueRange: number;
   hueDuration: number;
-  /** 7 lobe colors (center first, then pairs outward) */
   colors: string[];
-  /** Chromatic band ridge & fringes */
   bandColors: NonNullable<VoiceBeamProps['bandColors']>;
-  /** Fullscreen atmospheric horizon backdrop gradient colors & base opacity */
   ambientPrimaryRgba: string;
   ambientSecondaryRgba: string;
   ambientBaseOpacity: number;
@@ -46,25 +65,86 @@ export interface BlinkVisualPreset {
 }
 
 /**
- * Blink Signature Cyan / Electric Blue / Restrained Violet Palettes
+ * Curated top-1% color harmonies for DialKit atmosphere switching.
+ */
+interface AtmosphereOverride {
+  colors: string[];
+  bandColors: NonNullable<VoiceBeamProps['bandColors']>;
+  ambientPrimaryRgba: string;
+  ambientSecondaryRgba: string;
+  staticColors?: boolean;
+}
+
+export const ATMOSPHERE_OVERRIDES: Record<
+  Exclude<BlinkAtmosphereId, 'blink-cyan'>,
+  AtmosphereOverride
+> = {
+  'aurora-violet': {
+    colors: ['#A78BFA', '#8B5CF6', '#38BDF8', '#7C3AED', '#2563EB', '#C084FC', '#0EA5E9'],
+    bandColors: { core: '#F5F3FF', above: '#C4B5FD', mid: '#38BDF8', below: '#7C3AED' },
+    ambientPrimaryRgba: 'rgba(139, 92, 246, 0.32)',
+    ambientSecondaryRgba: 'rgba(56, 189, 248, 0.18)',
+  },
+  bioluminescent: {
+    colors: ['#2DD4BF', '#35DFFF', '#10B981', '#0EA5E9', '#14B8A6', '#06B6D4', '#0284C7'],
+    bandColors: { core: '#ECFEFF', above: '#5EEAD4', mid: '#35DFFF', below: '#059669' },
+    ambientPrimaryRgba: 'rgba(45, 212, 191, 0.30)',
+    ambientSecondaryRgba: 'rgba(14, 165, 233, 0.16)',
+  },
+  'midnight-ice': {
+    colors: ['#E0F2FE', '#7DD3FC', '#38BDF8', '#0284C7', '#1D4ED8', '#60A5FA', '#0369A1'],
+    bandColors: { core: '#FFFFFF', above: '#BAE6FD', mid: '#38BDF8', below: '#1E40AF' },
+    ambientPrimaryRgba: 'rgba(125, 211, 252, 0.28)',
+    ambientSecondaryRgba: 'rgba(30, 64, 175, 0.18)',
+  },
+  'obsidian-mono': {
+    colors: ['#F8FAFC', '#CBD5E1', '#94A3B8', '#64748B', '#E2E8F0', '#475569', '#334155'],
+    bandColors: { core: '#FFFFFF', above: '#E2E8F0', mid: '#94A3B8', below: '#475569' },
+    ambientPrimaryRgba: 'rgba(226, 232, 240, 0.22)',
+    ambientSecondaryRgba: 'rgba(100, 116, 139, 0.12)',
+    staticColors: true,
+  },
+};
+
+function hexToRgba(hex: string, alpha: number): string {
+  const clean = hex.replace('#', '').trim();
+  const full =
+    clean.length === 3
+      ? clean
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : clean;
+  if (full.length !== 6) return `rgba(53, 223, 255, ${alpha})`;
+  const r = Number.parseInt(full.slice(0, 2), 16);
+  const g = Number.parseInt(full.slice(2, 4), 16);
+  const b = Number.parseInt(full.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+    return `rgba(53, 223, 255, ${alpha})`;
+  }
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
+ * Blink Signature Cyan / Electric Blue / Restrained Violet Palettes (H1 Approved)
  */
 const PALETTE_IDLE = [
-  '#35DFFF', // center: Blink cyan
-  '#0EA5E9', // inner pair: electric sky
+  '#35DFFF',
+  '#0EA5E9',
   '#0284C7',
-  '#1D4ED8', // mid pair: deep electric blue
+  '#1D4ED8',
   '#2563EB',
-  '#4F46E5', // outer pair: restrained indigo-violet
+  '#4F46E5',
   '#0369A1',
 ];
 
 const PALETTE_LISTENING = [
-  '#35DFFF', // center: crisp Blink cyan
+  '#35DFFF',
   '#22D3EE',
   '#38BDF8',
   '#0EA5E9',
   '#2563EB',
-  '#6366F1', // restrained violet edge
+  '#6366F1',
   '#0284C7',
 ];
 
@@ -79,27 +159,27 @@ const PALETTE_LISTENING_MUTED = [
 ];
 
 const PALETTE_THINKING = [
-  '#38BDF8', // focused luminous blue-cyan core
+  '#38BDF8',
   '#2563EB',
   '#3B82F6',
-  '#6366F1', // deeper contemplative violet accents
+  '#6366F1',
   '#7C3AED',
   '#8B5CF6',
   '#0EA5E9',
 ];
 
 const PALETTE_SPEAKING = [
-  '#7CEEFF', // radiant bright cyan core
+  '#7CEEFF',
   '#35DFFF',
   '#0EA5E9',
   '#3B82F6',
-  '#7C3AED', // expressive electric violet harmonics
+  '#7C3AED',
   '#6366F1',
   '#22D3EE',
 ];
 
 const PALETTE_INTERRUPTED = [
-  '#A5F3FC', // crisp bright cyan acknowledgment
+  '#A5F3FC',
   '#35DFFF',
   '#38BDF8',
   '#0EA5E9',
@@ -109,7 +189,7 @@ const PALETTE_INTERRUPTED = [
 ];
 
 const PALETTE_ERROR = [
-  '#FB7185', // restrained warm rose-amber warning
+  '#FB7185',
   '#F43F5E',
   '#E11D48',
   '#F59E0B',
@@ -402,42 +482,93 @@ export const BLINK_VISUAL_PRESETS: Record<VoiceSessionState, BlinkVisualPreset> 
 
 export function resolveVisualPreset(
   state: VoiceSessionState,
-  isMuted: boolean
+  isMuted: boolean,
+  tuning?: Partial<VoiceGlowTuning>
 ): BlinkVisualPreset {
   const base = BLINK_VISUAL_PRESETS[state];
-  if (state === 'listening' && isMuted) {
-    return {
-      ...base,
-      strength: 0.46,
-      idle: 0.14,
-      flow: 10,
-      bandStrength: 0.55,
-      distortion: 0.12,
-      brightness: 0.88,
-      saturation: 0.92,
-      colors: PALETTE_LISTENING_MUTED,
-      ambientPrimaryRgba: 'rgba(30, 111, 136, 0.18)',
-      ambientSecondaryRgba: 'rgba(30, 58, 95, 0.10)',
-      ambientBaseOpacity: 0.28,
-      ambientEnergyBoost: 0.0,
+  let resolved: BlinkVisualPreset =
+    state === 'listening' && isMuted
+      ? {
+          ...base,
+          strength: 0.46,
+          idle: 0.14,
+          flow: 10,
+          bandStrength: 0.55,
+          distortion: 0.12,
+          brightness: 0.88,
+          saturation: 0.92,
+          colors: PALETTE_LISTENING_MUTED,
+          ambientPrimaryRgba: 'rgba(30, 111, 136, 0.18)',
+          ambientSecondaryRgba: 'rgba(30, 58, 95, 0.10)',
+          ambientBaseOpacity: 0.28,
+          ambientEnergyBoost: 0.0,
+        }
+      : { ...base };
+
+  if (!tuning || state === 'error' || state === 'ending') {
+    return resolved;
+  }
+
+  const intensity = tuning.glowIntensity ?? 1;
+  const reachMult = tuning.horizonReach ?? 1;
+  const flowMult = tuning.motionFlow ?? 1;
+  const haloMult = tuning.ambientHalo ?? 1;
+
+  resolved = {
+    ...resolved,
+    strength: Math.min(1, Math.max(0.08, resolved.strength * intensity)),
+    brightness: Math.min(1.6, Math.max(0.5, resolved.brightness * (0.65 + 0.35 * intensity))),
+    reach: resolved.reach * reachMult,
+    bend: resolved.bend * reachMult,
+    innerHeight: resolved.innerHeight * reachMult,
+    bloomHeight: resolved.bloomHeight * reachMult,
+    flow: resolved.flow * flowMult,
+    bandStrength: tuning.chromaticRim === false ? 0 : resolved.bandStrength * intensity,
+    ambientBaseOpacity: Math.min(1, resolved.ambientBaseOpacity * haloMult),
+    ambientEnergyBoost: Math.min(1, resolved.ambientEnergyBoost * haloMult),
+  };
+
+  if (tuning.useCustomColors && tuning.primaryColor && tuning.accentColor && !(state === 'listening' && isMuted)) {
+    const p = tuning.primaryColor;
+    const a = tuning.accentColor;
+    resolved = {
+      ...resolved,
+      colors: [p, p, a, p, a, a, p],
+      bandColors: {
+        core: '#F8FAFC',
+        above: p,
+        mid: p,
+        below: a,
+      },
+      ambientPrimaryRgba: hexToRgba(p, state === 'idle' ? 0.16 : 0.32),
+      ambientSecondaryRgba: hexToRgba(a, state === 'idle' ? 0.09 : 0.19),
+    };
+  } else if (
+    tuning.atmosphere &&
+    tuning.atmosphere !== 'blink-cyan' &&
+    !(state === 'listening' && isMuted)
+  ) {
+    const theme = ATMOSPHERE_OVERRIDES[tuning.atmosphere];
+    resolved = {
+      ...resolved,
+      colors: theme.colors,
+      bandColors: theme.bandColors,
+      ambientPrimaryRgba: theme.ambientPrimaryRgba,
+      ambientSecondaryRgba: theme.ambientSecondaryRgba,
+      staticColors: theme.staticColors ?? resolved.staticColors,
     };
   }
-  return base;
+
+  return resolved;
 }
 
-/**
- * Compute proportional VoiceBeam scale across mobile portrait, mobile landscape,
- * and wide desktop viewports so the glow remains balanced without distortion.
- */
 export function computeResponsiveBeamScale(width: number, height: number): number {
   const minDim = Math.min(width, height);
-  // Wide desktop displays get a more generous presence; narrow phones stay crisp
   if (width >= 1280) {
     return Math.min(1.65, Math.max(1.25, width / 960));
   }
   if (width >= 768) {
     return Math.min(1.35, Math.max(1.05, width / 760));
   }
-  // Compact mobile (portrait or landscape)
   return Math.min(1.12, Math.max(0.88, minDim / 380));
 }

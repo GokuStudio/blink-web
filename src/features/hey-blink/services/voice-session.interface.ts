@@ -73,8 +73,60 @@ export interface VoiceStateChangeEvent {
 export interface VoiceSessionStartOptions {
   /** Optional room or device correlation ID for future multi-device integration */
   deviceId?: string;
+  /** Optional browser audio input deviceId (e.g. specific USB microphone) */
+  audioInputDeviceId?: string;
   /** Start muted if user prefers silent observation */
   initialMuted?: boolean;
+}
+
+export type VoiceProviderKind = 'mock' | 'gemini-live';
+
+/**
+ * Runtime performance and reliability telemetry collected during a session.
+ * Surfaced only in dev diagnostics; never triggers per-frame React re-renders.
+ */
+export interface VoiceSessionMetrics {
+  model: string | null;
+  activationToReadyMs: number | null;
+  micStartupMs: number | null;
+  lastCaptureToSendMs: number | null;
+  endOfSpeechToFirstAudioMs: number | null;
+  firstAudioToPlaybackMs: number | null;
+  interruptionToSilenceMs: number | null;
+  reconnectionDurationMs: number | null;
+  underrunCount: number;
+  droppedChunks: number;
+  reconnectAttempts: number;
+  hasResumptionHandle: boolean;
+}
+
+/**
+ * Transient debug-only transcription fragment (never shown in production fullscreen UI,
+ * never persisted to Firebase or localStorage).
+ */
+export interface TransientDebugTranscript {
+  id: string;
+  speaker: 'user' | 'blink';
+  text: string;
+  timestamp: number;
+}
+
+export interface IVoiceSessionDiagnostics {
+  readonly supportsDiagnostics: true;
+  getMetrics(): VoiceSessionMetrics;
+  getDebugTranscripts(): readonly TransientDebugTranscript[];
+  setDebugTranscriptionEnabled(enabled: boolean): void;
+  isDebugTranscriptionEnabled(): boolean;
+}
+
+export function hasVoiceDiagnostics(
+  session: IVoiceSession | null | undefined
+): session is IVoiceSession & IVoiceSessionDiagnostics {
+  return Boolean(
+    session &&
+      'supportsDiagnostics' in session &&
+      (session as Partial<IVoiceSessionDiagnostics>).supportsDiagnostics === true
+  );
 }
 
 export type VoiceStateListener = (event: VoiceStateChangeEvent) => void;

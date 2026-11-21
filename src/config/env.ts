@@ -9,6 +9,12 @@ export interface AppEnv {
   isProductionFirebaseEnabled: boolean;
   defaultRoom: string;
   autoStartSimulator: boolean;
+  heyBlink: {
+    /** Explicit provider override in dev ('mock' | 'gemini-live' | '') */
+    provider: 'mock' | 'gemini-live' | '';
+    /** Trusted backend endpoint that mints short-lived Gemini Live ephemeral tokens */
+    tokenEndpoint: string;
+  };
   firebase: {
     apiKey: string;
     authDomain: string;
@@ -23,6 +29,9 @@ export interface AppEnv {
 const rawApiKey = import.meta.env.VITE_FIREBASE_API_KEY || 'mock-api-key';
 const isMockApiKey = !rawApiKey || rawApiKey.startsWith('mock-');
 const isExplicitProductionEnabled = import.meta.env.VITE_ENABLE_PRODUCTION_FIREBASE === 'true';
+const rawVoiceProvider = (import.meta.env.VITE_HEY_BLINK_PROVIDER || '').trim();
+const normalizedVoiceProvider: 'mock' | 'gemini-live' | '' =
+  rawVoiceProvider === 'mock' || rawVoiceProvider === 'gemini-live' ? rawVoiceProvider : '';
 
 export const env: AppEnv = {
   isDev: import.meta.env.DEV,
@@ -31,6 +40,10 @@ export const env: AppEnv = {
   isProductionFirebaseEnabled: !isMockApiKey && isExplicitProductionEnabled,
   defaultRoom: import.meta.env.VITE_DEMO_DEFAULT_ROOM || 'BLINK-DEMO',
   autoStartSimulator: import.meta.env.VITE_SIMULATOR_AUTO_START === 'true',
+  heyBlink: {
+    provider: normalizedVoiceProvider,
+    tokenEndpoint: (import.meta.env.VITE_HEY_BLINK_TOKEN_ENDPOINT || '').trim(),
+  },
   firebase: {
     apiKey: rawApiKey,
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'blink-web-demo.firebaseapp.com',

@@ -1,12 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MockVoiceSession } from '../services/mock-voice-session';
+import {
+  listAudioInputDevices,
+  type AudioInputDeviceInfo,
+} from '../audio/microphone-capture';
+import { GeminiLiveVoiceSession } from '../services/gemini-live-voice-session';
+import {
+  createVoiceSessionProvider,
+  resolveVoiceProviderConfig,
+} from '../services/voice-provider-factory';
 import {
   DeviceExperienceTransitionHooks,
   hasMockVoiceControls,
+  hasVoiceDiagnostics,
   IVoiceSession,
+  TransientDebugTranscript,
   VoiceAudioLevels,
   VoiceAudioListener,
+  VoiceProviderKind,
   VoiceSessionErrorCode,
+  VoiceSessionMetrics,
   VoiceSessionStartOptions,
   VoiceSessionState,
 } from '../services/voice-session.interface';
@@ -14,8 +26,10 @@ import { canInterruptVoiceState, isActiveVoiceState } from '../services/voice-st
 import { useVoiceStore } from '../state/voice.store';
 
 export interface UseVoiceSessionOptions {
-  /** Factory for constructing the active IVoiceSession implementation */
+  /** Optional custom session factory (overrides default provider factory) */
   createSession?: () => IVoiceSession;
+  /** Optional initial provider override ('mock' | 'gemini-live') */
+  initialProvider?: VoiceProviderKind;
   /** Future DeviceExperienceController lifecycle hooks */
   transitionHooks?: DeviceExperienceTransitionHooks;
 }
@@ -28,15 +42,31 @@ export interface UseVoiceSessionResult {
   isMuted: boolean;
   isSimulated: boolean;
   providerId: string;
+  providerKind: VoiceProviderKind;
+  isLiveEndpointConfigured: boolean;
   sessionId: string | null;
   error: ReturnType<typeof useVoiceStore.getState>['error'];
   autoCycleEnabled: boolean;
   supportsDevControls: boolean;
+  supportsDiagnostics: boolean;
+
+  /** Available browser audio input devices (e.g. USB microphones) */
+  audioInputDevices: AudioInputDeviceInfo[];
+  selectedAudioDeviceId: string;
+  setSelectedAudioDeviceId: (deviceId: string) => void;
+  refreshAudioDevices: () => Promise<void>;
+
+  /** Switch active provider between 'mock' and 'gemini-live' (tears down active session cleanly) */
+  switchProvider: (kind: VoiceProviderKind) => void;
 
   /** High-frequency ref updated every audio tick with ZERO React re-renders */
   audioLevelsRef: React.MutableRefObject<VoiceAudioLevels>;
   /** Subscribe directly to audio frames for imperative DOM / Canvas visualizers */
   subscribeAudio: (listener: VoiceAudioListener) => () => void;
+  /** Subscribe to transient user transcripts (used internally by ConversationEndDetector) */
+  subscribeUserTranscript: (listener: (text: string, isFinal: boolean) => void) => () => void;
+  /** Access underlying session instance for controller coordination */
+  getSessionInstance: () => IVoiceSession | null;
 
   start: (options?: VoiceSessionStartOptions) => Promise<void>;
   end: () => Promise<void>;
@@ -50,6 +80,12 @@ export interface UseVoiceSessionResult {
   devTriggerError: (code: VoiceSessionErrorCode) => void;
   devTriggerSpeechBurst: () => void;
   devSetAutoCycle: (enabled: boolean) => void;
+
+  /** Dev-only live diagnostics (safe null/empty when unsupported) */
+  getDiagnosticsMetrics: () => VoiceSessionMetrics | null;
+  getDebugTranscripts: () => readonly TransientDebugTranscript[];
+  debugTranscriptionEnabled: boolean;
+  setDebugTranscriptionEnabled: (enabled: boolean) => void;
 }
 
 const ZERO_AUDIO: VoiceAudioLevels = {
@@ -59,12 +95,16 @@ const ZERO_AUDIO: VoiceAudioLevels = {
   isSimulated: true,
 };
 
-function defaultCreateSession(): IVoiceSession {
-  return new MockVoiceSession({ autoCycle: true });
-}
-
 export function useVoiceSession(options: UseVoiceSessionOptions = {}): UseVoiceSessionResult {
-  const { createSession = defaultCreateSession, transitionHooks } = options;
+  const { createSession, initialProvider, transitionHooks } = options;
+
+  const resolvedConfig = resolveVoiceProviderConfig();
+  const [providerKind, setProviderKind] = useState<VoiceProviderKind>(
+    () => initialProvider ?? resolvedConfig.provider
+  );
+  const [audioInputDevices, setAudioInputDevices] = useState<AudioInputDeviceInfo[]>([]);
+  const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState<string>('default');
+  const [debugTranscriptionEnabled, setDebugTranscriptionState] = useState(false);
 
   const state = useVoiceStore((s) => s.state);
   const previousState = useVoiceStore((s) => s.previousState);
@@ -84,22 +124,62 @@ export function useVoiceSession(options: UseVoiceSessionOptions = {}): UseVoiceS
   createSessionRef.current = createSession;
   const transitionHooksRef = useRef(transitionHooks);
   transitionHooksRef.current = transitionHooks;
+  const selectedAudioDeviceIdRef = useRef(selectedAudioDeviceId);
+  selectedAudioDeviceIdRef.current = selectedAudioDeviceId;
 
   const [supportsDevControls, setSupportsDevControls] = useState(false);
+  const [supportsDiagnostics, setSupportsDiagnostics] = useState(false);
 
+  const refreshAudioDevices = useCallback(async () => {
+    const devices = await listAudioInputDevices();
+    setAudioInputDevices(devices);
+  }, []);
+
+  // Enumerate microphones initially and on hot-plug (e.g. USB mic connected/unplugged)
   useEffect(() => {
-    const session = createSessionRef.current();
+    void refreshAudioDevices();
+    if (
+      typeof navigator !== 'undefined' &&
+      navigator.mediaDevices &&
+      typeof navigator.mediaDevices.addEventListener === 'function'
+    ) {
+      const handleDeviceChange = () => {
+        void refreshAudioDevices();
+      };
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+      return () => {
+        navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      };
+    }
+    return undefined;
+  }, [refreshAudioDevices]);
+
+  // Mount & cleanly dispose exactly one active session per providerKind (React.StrictMode-safe)
+  useEffect(() => {
+    const session = createSessionRef.current
+      ? createSessionRef.current()
+      : createVoiceSessionProvider(providerKind);
     sessionRef.current = session;
 
     applySnapshot(session.getSnapshot());
-    const hasDevControls = hasMockVoiceControls(session);
-    setSupportsDevControls(hasDevControls);
-    if (hasDevControls) {
+    const hasMock = hasMockVoiceControls(session);
+    const hasDiag = hasVoiceDiagnostics(session);
+    setSupportsDevControls(hasMock);
+    setSupportsDiagnostics(hasDiag);
+    if (hasMock) {
       setAutoCycleEnabled(session.isAutoCycleEnabled());
+    }
+    if (hasDiag) {
+      session.setDebugTranscriptionEnabled(debugTranscriptionEnabled);
     }
 
     const unsubscribeState = session.subscribeState((event) => {
       applySnapshot(event.snapshot);
+
+      // Refresh device labels once microphone permission has been granted during entering/listening
+      if (event.previousState === 'entering' && event.nextState === 'listening') {
+        void refreshAudioDevices();
+      }
 
       const hooks = transitionHooksRef.current;
       if (!hooks) return;
@@ -130,13 +210,22 @@ export function useVoiceSession(options: UseVoiceSessionOptions = {}): UseVoiceS
       audioLevelsRef.current = { ...ZERO_AUDIO };
       resetStore();
     };
-  }, [applySnapshot, resetStore, setAutoCycleEnabled]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerKind, applySnapshot, resetStore, setAutoCycleEnabled, refreshAudioDevices]);
+
+  const switchProvider = useCallback((kind: VoiceProviderKind) => {
+    if (createSessionRef.current) return;
+    setProviderKind(kind);
+  }, []);
 
   const start = useCallback(async (startOpts?: VoiceSessionStartOptions) => {
     const session = sessionRef.current;
     if (!session) return;
     await transitionHooksRef.current?.onPrepareConversationTransition?.();
-    await session.start(startOpts);
+    await session.start({
+      audioInputDeviceId: selectedAudioDeviceIdRef.current,
+      ...startOpts,
+    });
   }, []);
 
   const end = useCallback(async () => {
@@ -168,6 +257,19 @@ export function useVoiceSession(options: UseVoiceSessionOptions = {}): UseVoiceS
     if (!session) return () => {};
     return session.subscribeAudio(listener);
   }, []);
+
+  const subscribeUserTranscript = useCallback(
+    (listener: (text: string, isFinal: boolean) => void) => {
+      const session = sessionRef.current;
+      if (session instanceof GeminiLiveVoiceSession) {
+        return session.subscribeUserTranscript(listener);
+      }
+      return () => {};
+    },
+    []
+  );
+
+  const getSessionInstance = useCallback(() => sessionRef.current, []);
 
   const devTriggerState = useCallback((target: VoiceSessionState) => {
     const session = sessionRef.current;
@@ -201,6 +303,30 @@ export function useVoiceSession(options: UseVoiceSessionOptions = {}): UseVoiceS
     [setAutoCycleEnabled]
   );
 
+  const getDiagnosticsMetrics = useCallback((): VoiceSessionMetrics | null => {
+    const session = sessionRef.current;
+    if (hasVoiceDiagnostics(session)) {
+      return session.getMetrics();
+    }
+    return null;
+  }, []);
+
+  const getDebugTranscripts = useCallback((): readonly TransientDebugTranscript[] => {
+    const session = sessionRef.current;
+    if (hasVoiceDiagnostics(session)) {
+      return session.getDebugTranscripts();
+    }
+    return [];
+  }, []);
+
+  const setDebugTranscriptionEnabled = useCallback((enabled: boolean) => {
+    setDebugTranscriptionState(enabled);
+    const session = sessionRef.current;
+    if (hasVoiceDiagnostics(session)) {
+      session.setDebugTranscriptionEnabled(enabled);
+    }
+  }, []);
+
   return {
     state,
     previousState,
@@ -209,12 +335,22 @@ export function useVoiceSession(options: UseVoiceSessionOptions = {}): UseVoiceS
     isMuted,
     isSimulated,
     providerId,
+    providerKind,
+    isLiveEndpointConfigured: resolvedConfig.isLiveConfigured,
     sessionId,
     error,
     autoCycleEnabled,
     supportsDevControls,
+    supportsDiagnostics,
+    audioInputDevices,
+    selectedAudioDeviceId,
+    setSelectedAudioDeviceId,
+    refreshAudioDevices,
+    switchProvider,
     audioLevelsRef,
     subscribeAudio,
+    subscribeUserTranscript,
+    getSessionInstance,
     start,
     end,
     retry,
@@ -225,5 +361,9 @@ export function useVoiceSession(options: UseVoiceSessionOptions = {}): UseVoiceS
     devTriggerError,
     devTriggerSpeechBurst,
     devSetAutoCycle,
+    getDiagnosticsMetrics,
+    getDebugTranscripts,
+    debugTranscriptionEnabled,
+    setDebugTranscriptionEnabled,
   };
 }
