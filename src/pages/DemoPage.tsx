@@ -414,31 +414,7 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService, createVoice
                     </span>
                   </button>
 
-                  {isCameraActive && !voice.isEngaged ? (
-                    <button
-                      type="button"
-                      onClick={() => setMirroringEnabled(!isMirroringEnabled)}
-                      aria-label={
-                        isMirroringEnabled ? 'Pause eyelid mirroring' : 'Resume eyelid mirroring'
-                      }
-                      aria-pressed={isMirroringEnabled}
-                      data-testid="stage-mirror-toggle"
-                      className={`inline-flex h-11 w-11 items-center justify-center rounded-full border transition-colors active:scale-[0.98] cursor-pointer focus-visible:outline-2 focus-visible:outline-[#A6FA4C] ${
-                        isMirroringEnabled
-                          ? 'bg-[#35DFFF]/12 border-[#35DFFF]/35 text-[#35DFFF] hover:bg-[#35DFFF]/20'
-                          : 'bg-white/[0.04] border-white/[0.08] text-neutral-400 hover:text-white'
-                      }`}
-                      title={
-                        isMirroringEnabled ? 'Eyelid mirroring active' : 'Eyelid mirroring paused'
-                      }
-                    >
-                      {isMirroringEnabled ? (
-                        <Eye className="h-4 w-4" strokeWidth={1.9} />
-                      ) : (
-                        <EyeOff className="h-4 w-4" strokeWidth={1.9} />
-                      )}
-                    </button>
-                  ) : !isCameraActive && session.stageState === 'OFFLINE' ? (
+                  {!isCameraActive && session.stageState === 'OFFLINE' ? (
                     <button
                       type="button"
                       onClick={() => void session.reconnectSession()}
@@ -458,16 +434,42 @@ export const DemoPage: React.FC<DemoPageProps> = ({ realtimeService, createVoice
                   <BlinkVoiceControlsPill voice={voice} />
                 </div>
 
-                <p
-                  data-testid="stage-status-caption"
-                  className="text-[11.5px] text-neutral-400 text-center max-w-[360px] px-2 leading-snug"
-                >
-                  {voice.isEngaged
-                    ? voice.isSimulated
-                      ? 'Voice preview active · Camera monitoring and Elevated telemetry continue uninterrupted'
-                      : 'Voice mode active · Camera monitoring and Elevated telemetry continue uninterrupted'
-                    : statusMeta.caption}
-                </p>
+                <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 max-w-[380px] px-2">
+                  <p
+                    data-testid="stage-status-caption"
+                    className="text-[11.5px] text-neutral-400 text-center leading-snug"
+                  >
+                    {voice.isEngaged
+                      ? voice.isSimulated
+                        ? 'Voice preview active · Camera monitoring and Elevated telemetry continue uninterrupted'
+                        : 'Voice mode active · Camera monitoring and Elevated telemetry continue uninterrupted'
+                      : statusMeta.caption}
+                  </p>
+
+                  {isCameraActive && !voice.isEngaged && (
+                    <button
+                      type="button"
+                      onClick={() => setMirroringEnabled(!isMirroringEnabled)}
+                      aria-label={
+                        isMirroringEnabled ? 'Pause eyelid mirroring' : 'Resume eyelid mirroring'
+                      }
+                      aria-pressed={isMirroringEnabled}
+                      data-testid="stage-mirror-toggle"
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-[#35DFFF] ${
+                        isMirroringEnabled
+                          ? 'bg-white/[0.05] text-neutral-300 hover:bg-white/[0.09] hover:text-white'
+                          : 'bg-white/[0.03] text-neutral-500 hover:bg-white/[0.07] hover:text-neutral-300'
+                      }`}
+                    >
+                      {isMirroringEnabled ? (
+                        <Eye className="h-3 w-3 text-[#35DFFF]" strokeWidth={2} />
+                      ) : (
+                        <EyeOff className="h-3 w-3 text-neutral-500" strokeWidth={2} />
+                      )}
+                      <span>{isMirroringEnabled ? 'Mirroring On' : 'Mirroring Paused'}</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
